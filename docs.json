@@ -40,7 +40,7 @@
   "navbar": {
     "primary": {
       "type": "button",
-      "label": "Hithub",
+      "label": "GitHub",
       "href": "https://github.com/fairfood/lip-toolkit/tree/main"
     }
   }
