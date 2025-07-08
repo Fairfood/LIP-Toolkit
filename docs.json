@@ -16,7 +16,7 @@
           {
             "group": "Introduction",
             "pages": [
-              "introduction/introduction-to-lip"
+              "introduction/introduction-to-LIP"
             ]
           },
           {
@@ -24,8 +24,9 @@
             "pages": [
               "introduction/who-this-guide-is-for",
               "introduction/what-this-guide-is-and-what-it-is-not",
-              "introduction/whats-needed-for-a-successful-lip-analysis",
-              "introduction/minimal-skills-required-to-use-the-toolkit"
+              "introduction/whats-needed-for-a-successful-LIP-analysis",
+              "introduction/minimal-skills-required-to-use-the-toolkit",
+              "introduction/process-overview"
             ]
           }
         ]
