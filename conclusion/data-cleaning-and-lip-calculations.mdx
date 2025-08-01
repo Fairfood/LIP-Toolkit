@@ -1,0 +1,55 @@
+Once the full sample has been collected, data cleaning and calculation can begin. An R script template called “**Step 1: Data cleaning and calculation**” is available for guiding you through the necessary steps to arrive at the LIP analysis. The visual below gives an overview of the different steps taken in this data cleaning and calculation script.   
+
+<img src="/images/conclusion/analysis-3.png" />
+
+**Living Income Price calculation**  
+As seen in the overview above, the final part of the first R script is calculating the Living Income Price. Understandably, this is quite a crucial part of your calculations so let’s dive deeper into what that entails.  The visual below provides an overview of the calculation.
+
+<img src="/images/conclusion/analysis-4.png" />
+ 
+<img src="/images/conclusion/analysis-5.png" />
+  
+The Living Income Price is essentially the yearly cost, divided by the quantity of produced crop. Yearly cost includes three key components: 
+
+**The Living Income Benchmark**, which is the cost of a decent but basic living standard for specific family size in a specific location. We adjust the benchmark to account for inflation and different family sizes. We also acknowledged that farmers might have multiple income sources, in which case the main crop should not be responsible for a 100% of the cost of living. This is why we multiply the benchmark by the diversification ratio, which is the proportion of income coming from the crop. Essentially,  if a farmer earns 80% of their total income from coffee (diversification ratio \= 0.8), then their income from coffee should be at least 80% of the Living Income benchmark. The other 20% should be earned from other sources the farmer has, such as livestock or the sale of other crops. 
+
+**The total production cost**, which is essentially the combination of all expenses directly related to the production of the crop. This is not accounted for in the Living Income benchmark and therefore needs to be included as an additional component to ensure that farmers cover their costs. 
+
+**The farm depreciation cost**, which is the total cost of establishing a farm divided over its expected lifespan to also account for initial farmer investments. This is a value, which you will have to decide on yourself as it varies from context to context. Work with your local partners to try and reach a reasonable value that corresponds to local conditions. In practice, if the cost of starting a coffee farm equals 1000 dollars and the farm can be productive for 30 years, then the farm depreciation cost is 1000/30 \= **33.333.** 
+
+## **Data analysis and visualisation**
+
+After data cleaning and calculation of all necessary variables comes the analysis, which you will find in the second R script called “**Step 2: Analysis and input for slide-deck**”. The script and presentation follow the same structure and include these sections: 
+
+| Section  | Goal  | Questions Answered |
+| :---- | :---- | :---- |
+| 1\. Sample | Understanding the farmers in your sample | How many farmers in the sample are women/youth/certified?  Where are your farmers located? |
+| 2\. Income Sources | Assessing the role of the focus crop in farmer income | How much of farmer income comes from the crop? What other income sources do farmers have?  What are other commonly grown crops? |
+| 3\. Production Cost | Getting insights into what makes up production cost | What are the most common cost drivers for farmers?  What is the total cost of production?  What types of labour do farmers have expenses for? |
+| 4\. Productivity  | Comparing farmers based on production per acre | What is the median productivity per acre? How does this compare across different groups of farmers? |
+| 5\. Living Income Price | Exploring the LIP for different farmer groups | How high is the Living Income Price?  How does it compare to the price farmers currently receive? Does the Living Income Price differ between groups? |
+| 6\. Interventions | Measuring impact of targeted interventions | By how much do interventions decrease the Living Income Price? |
+
+**Tip: Use ChatGPT**  
+Are pieces of the R script not working? Are you struggling to tailor the code to your dataset where variable names are slightly different? Asking ChatGPT or another AI Chatbot can be very useful to help you arrive at a working code without needing a lot of expertise. 
+
+**Final deliverable: Interactive slide deck**  
+For sharing your analysis results, we recommend using Canva and Flourish. The combination of both platforms let you build an interactive slide deck, which means viewers can click on visual elements (for example, to switch currencies or drill down into specific breakdowns). Check out a live example of this interactive deck [here](https://www.canva.com/design/DAGrh9dXcSI/9cmn61SU7O_gt_YrRRNM0Q/view?utm_content=DAGrh9dXcSI&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h445bc8c2d2).
+
+To get started, make a copy of our “[LIP Presentation guidance](https://www.canva.com/design/DAGqCK1v2pc/I-sNxjJdPmVnjUchRUHWNQ/view?utm_content=DAGqCK1v2pc&utm_campaign=designshare&utm_medium=link&utm_source=publishsharelink&mode=preview)” template. It contains editable example slides alongside step-by-step instructions for creating and customising your visualisations.
+
+## **How to arrive at recommendations from the analysis results?**
+
+The data derived from the analysis can be used to develop targeted interventions to reduce or close the Living Income Gap. The interventions should be targeted to the specific context and there is no copy paste procedure here. The automatically generated heat-map at the end of the slide deck presents the scale of LIP reductions brought by different interventions. This is an option to ‘model’ the effect of specific interventions on the overall LIP.
+
+Additionally to this, coming to recommendations requires a ‘manual’ approach. This includes discussion with the several stakeholders in your project about the interpretation of the data and how to use this data to inform decision making around targeted interventions in your specific context.  There are several ways to look at developing interventions. 
+
+* ***Closing/reducing the LIP gap with price intervention:*** the difference between the median price and the median LIP provides an indication on the price intervention needed to close the living income gap. However, in many cases, the price gap is too big making it impossible to close the living income gap by price interventions alone  
+* ***Closing/reducing the LIP gap with targeted interventions:***  the data provides other insights that can help define targeted interventions to further reduce the living income gap. The most common ones are:  
+  * ***Income diversification:*** In cases where farmers highly depend on the income coming from the main crop or where prices are relatively low it is worth investigating income diversifying activities that do not interfere with the (land used for) the main crop. Intercropping, off farm activities, livestock farming, agroforestry and carbon credit models are examples.  
+  * ***Reduction of labour/production costs:*** the data defines the most common drivers for production costs. This can be labour activities, inputs (seeds / fertilisers), materials, non-mechanic equipment. If high production costs are driving up the living income price gap it is worthwhile to investigate targeted interventions to reduce costs in the most common cost drivers. Common examples are seedling projects, good (regenerative) agricultural practices (training and/or fertiliser programmes).   
+  * ***Productivity:*** low yields are another common denominator of living income gaps. Increasing productivity very often reduces living income gaps if the interventions are well targeted and will receive a return on investment in the near future. Common examples here are farm management training, renovation of plants/trees, agroforestry system, soil management/soil fertility programmes.
+
+* ***Group disaggregation:*** As farmers are not one homogenous group with the same needs and problems, disaggregation based on their characteristics allows us  to pinpoint specific needs / interventions. Furthermore, interventions can be targeted based on the disaggregations provided in the analysis (e.g. gender, age,  region, certification status). 
+
+[^1]:  Smallholders are defined by the producers, as the definition of smallholder varies per country and crop.

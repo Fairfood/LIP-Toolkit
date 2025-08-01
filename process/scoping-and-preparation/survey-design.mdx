@@ -1,0 +1,104 @@
+The LIP Producer Survey is a quantitative tool developed to systematically capture the indicators needed for a Living Income Price analysis. This survey is designed for in-person interviews, allowing direct engagement with respondents. This format facilitates the collection of accurate and detailed information. The survey’s structure is flexible and tailored to meet the specific needs of a LIP study while adaptable to the contexts of different crops and countries.
+
+### Content of the survey
+
+The LIP Producer Survey is composed of 10 sections, each focusing on key areas relevant to the LIP analysis:
+
+1. **Introduction and consent:** Questions to introduce the survey and obtain consent from participants.  
+2. **Household demographics:** Questions on the farmer’s background, including age, gender, education, and household composition. This section is primarily used for data disaggregation.  
+3. **Farm characteristics**: Information about the farm, such as its size, location, and the variety of the focus crop.  
+4. **Revenue from the focus crop**: Questions on the quantity produced and sold, price, types of buyers, and revenue from the previous season.  
+5. **Production cost**:  Information on input costs, asset costs, labor, etc.  
+6. **Income from other crops:** Questions on the quantity produced and sold, prices from other crops and the different types of other crops.  
+7. **Income from livestock:** Questions on the types of livestock, the revenue from livestock, the related labour and other costs.  
+8. **Income from off-farm labour and other income:** Assess all other income sources and their related income.  
+9. **Access to finance and related costs**: Information about access to finance, including sources of loans.  
+10. **Cooperative Membership:** Questions about membership in agricultural cooperatives, its benefits, and certification.
+
+The primary goal of this survey is to accurately measure the Living Income Price (LIP). The details of how different questions contribute to this LIP are outlined in the calculation sheet. 
+
+### How to use the Survey Builder
+
+A Survey Builder tool has been developed to facilitate the design of the survey, ensuring consistency across different cases while allowing customisation to specific contexts. To begin, open the survey builder by making a copy of the template through [this link](https://docs.google.com/spreadsheets/d/1_9KPzlAJ-X6oedozcBpwATZTlL5ZLW-4/copy). 
+
+The survey layout is designed for direct upload into **KoBoToolbox**, a widely recognised platform for digital survey development. This format offers flexibility and adaptability, ensuring that the survey can be tailored to the unique needs of each context.
+
+The workbook consists of the following tabs:
+
+* Contextualisation sheet  
+* Survey (for KoboToolbox upload)  
+* Choices (for KoboToolbox upload)  
+* Settings (for KoboToolbox upload)
+
+### KoboToolbox Survey, choices, and settings templates
+
+The **Survey Worksheet** contains the full list of questions and their details, defining how they will appear and function in the KoBoCollect app or other compatible data collection platforms. This sheet should not be modified, as it is automatically contextualised based on the selections made in the Contextualisation Sheet. The main columns of the survey worksheet  are: 
+
+| Column name | Explanation |
+| :---- | :---- |
+| **Type** | This column specifies the type of input expected for each question. Examples include text, integer, decimal, select\_one, select\_multiple, date, and more. The type defines how the question will be presented in the app and determines the format of the data collected. |
+| **Name** | No two entries can have the same name. Names have to start with a letter or an underscore. Names can only contain letters, digits, hyphens, underscores, and periods. Names are case-sensitive. |
+| **Label** |  The column contains the actual text you see for the question. |
+| **Hint** | Provides additional guidance to enumerators or respondents on how to answer the question. Hints can clarify the intent of the question or provide examples to help respondents understand what is being asked. |
+| **Disabled** | This column determines whether a question will be displayed or hidden. If set to TRUE, the question is disabled and will not appear during data collection. In this context, the Disabled column is linked to the Information Worksheet, where indicators and preferred methods are selected. Questions related to unselected indicators are automatically disabled (set to TRUE). |
+| **Appearance** |  |
+| **Default** |  |
+| **Relevant** | This column controls the visibility of a question based on conditions or responses to previous questions. For example, if a respondent selects "Yes" for a specific question, additional follow-up questions can be triggered. Conversely, irrelevant questions can be skipped. |
+| **Constraint** | Allows you to impose restrictions on the respondent’s answers to ensure data quality. For instance, a constraint can enforce that a respondent enters an age greater than 18 or that a numeric value falls within a specified range. When a respondent provides an invalid response, an error message is displayed, guiding them to correct their input. |
+| **Calculation** | It is used to perform calculations based on the values of preceding questions. The result is stored in a calculated variable, which can then be utilised in question labels or to set constraints for subsequent questions. |
+| **Repeat\_count** | Instead of allowing an infinite number of repeat group questions, this column can be used to specify the exact number of times a set of questions should repeat. |
+| **Choice\_filter** | This column enables responses to a question to filter the options available in subsequent questions by implementing a cascading select. |
+
+The **Choices Worksheet** defines the options for multiple-choice questions. Each row represents a single choice, and these are grouped by **list\_name**, linking them to the relevant question in the Survey Worksheet.
+
+ It contains 3 main columns:
+
+| Column name | Explanation |
+| :---- | :---- |
+| **list\_name** | Specifies the name of the choice list associated with a question. This name links the choices to a specific question in the Survey Worksheet, ensuring the correct options are displayed. Example: For a question about crop types, the list\_name could be crop\_list, which ties the options (e.g., maize, rice, wheat) to the relevant question. |
+| **name** | Serves as the unique identifier for each choice. This is the value that will be stored in the dataset when a respondent selects an option. We commonly use numbers from 1\. Additionally we use:  **0** for options such as “None of the above” **9999** for “I don’t know”  **9998** for “I prefer not to say” **77** for “Other” or “Other, please specify:” |
+| **label** | Displays the text or description of the answer choice as seen by the respondent.  |
+
+While optional, the **Settings Worksheet** is highly recommended to ensure proper metadata management for the survey. At a minimum, you should specify the **form\_title** and **form\_id**, which are essential for organising and identifying your survey. The **form\_id** defaults to the date, but it can be customised if needed.
+
+For more information on using KoBoToolbox’s XLSForm format, please refer to [https://xlsform.org/en/](https://xlsform.org/en/)
+
+### Manual adjustments
+
+After making a copy of the survey and filling out the contextualisation sheet, there are a few leftover tasks that cannot be automated. These can be found under the **manual checklist** part of the contextualisation form and are mainly related to the **choices** sheet. The lists that require attention are in <span style={{ color: "red" }}>red</span>. 
+
+You will need to manually fill in the names of the enumerators that are being sent to the field and the location names for every administrative level. It is only necessary to fill in the names of localities where the data collection is taking place as these will be used to record the location of the farmer. Make sure that the list\_name is **exactly the same** for all options and that the name column contains only **unique** **values**. 
+
+Example: Data collection in Sierra Leone in 3 districts. 
+
+| list\_name | name | label |
+| :---- | :---- | :---- |
+| admin2 | 0 | Not Listed |
+| admin2 | 1 | Port Loko |
+| admin2 | 2 | Kambia |
+| admin2 | 3 | Bombali |
+
+The second adjustment is related to the crop harvests and seasons. When we ask farmers about their production quantities and cost, we allow them to choose the time period for which they want to report. In practice, some farmers may choose to report their quantities and cost for the main and the off season separately. Some may have only had one productive season. Some may know their cost values but only per the whole year. The survey is currently designed to let farmers answer for the last 12 months, season 1 or season 2\. That is determined by this list in the **choices** sheet:
+
+| list\_name | name | label |
+| :---- | :---- | :---- |
+| f\_focus\_rev\_timeperiod | 1 | Whole year (past 12 months) |
+| f\_focus\_rev\_timeperiod | 2 | Season 1\* |
+| f\_focus\_rev\_timeperiod | 3 | Season 2\* |
+
+However, that might not be optimal for every focus crop. In some scenarios the seasons also have distinct local names. For example,  in the context of coffee in Uganda this could be the Main crop and the Fly Crop. Labels with an \* can be replaced by these local names to facilitate better understanding between enumerators and respondents. If you think farmers might prefer reporting by four seasons instead of two feel free to adjust the list: 
+
+| list\_name | name | label |
+| :---- | :---- | :---- |
+| f\_focus\_rev\_timeperiod | 1 | Whole year (past 12 months) |
+| f\_focus\_rev\_timeperiod | 2 | Season 1\* |
+| f\_focus\_rev\_timeperiod | 3 | Season 2\* |
+| f\_focus\_rev\_timeperiod | 4 | Season 3\* |
+| f\_focus\_rev\_timeperiod | 5 | Season 4\* |
+
+\*to be replaced by more distinctive/local names  
+It is important to choose the option that will feel the most natural to farmers to get more accurate and reliable information. 
+
+Lastly, the **manual checklist** also includes a list of tasks for the contextualisation sheet that ensure the automatic adjustments to the survey work as intended. In case you do not require the Spanish translation of the survey, delete the following columns from the **survey** sheet: 
+
+- label::Spanish, hint::Spanish, constraint message::Spanish

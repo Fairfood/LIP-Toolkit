@@ -17,17 +17,55 @@
           {
             "group": "Introduction",
             "pages": [
-              "introduction/introduction-to-LIP"
+              "introduction/introduction-to-LIP",
+              {
+                "group": "Introduction to this toolkit",
+                "pages": [
+                  "introduction/who-this-guide-is-for",
+                  "introduction/what-this-guide-is-and-what-it-is-not",
+                  "introduction/whats-needed-for-a-successful-LIP-analysis",
+                  "introduction/minimal-skills-required-to-use-the-toolkit",
+                  "introduction/process-overview"
+                ]
+              }
             ]
           },
           {
-            "group": "Introduction to this toolkit",
+            "group": "Process",
             "pages": [
-              "introduction/who-this-guide-is-for",
-              "introduction/what-this-guide-is-and-what-it-is-not",
-              "introduction/whats-needed-for-a-successful-LIP-analysis",
-              "introduction/minimal-skills-required-to-use-the-toolkit",
-              "introduction/process-overview"
+              {
+                "group": "Scoping and Preparation",
+                "pages": [
+                  "process/scoping-and-preparation/overview",
+                  "process/scoping-and-preparation/intake-and-kick-off",
+                  "process/scoping-and-preparation/survey-design",
+                  "process/scoping-and-preparation/implement-survey-into-KoboToolbox",
+                  "process/scoping-and-preparation/sampling",
+                  "process/scoping-and-preparation/field-preparations"
+                ]
+              },
+              {
+                "group": "Data Collection",
+                "pages": [
+                  "process/data-collection/overview",
+                  "process/data-collection/enumerator-training",
+                  "process/data-collection/procedures-and-tips-for-a-quality-interview",
+                  "process/data-collection/ethical-considerations",
+                  "process/data-collection/data-quality-monitoring"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "Conclusion",
+            "pages": [
+              {
+                "group": "Analysis and Recommendations",
+                "pages": [
+                  "conclusion/overview",
+                  "conclusion/data-cleaning-and-lip-calculations"
+                ]
+              }
             ]
           }
         ]
