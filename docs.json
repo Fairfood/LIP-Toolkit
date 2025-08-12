@@ -1,13 +1,13 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "LIP Toolkit",
+  "name": "Farmer Income Data Toolkit",
   "colors": {
     "primary": "#395542",
     "light": "#07C983",
     "dark": "#15803D"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/images/favicon.png",
   "appearance": {"default": "light", "strict": true},
   "navigation": {
     "tabs": [
@@ -17,7 +17,8 @@
           {
             "group": "Introduction",
             "pages": [
-              "introduction/introduction-to-LIP",
+              "introduction/farmer-income-data-toolkit",
+              "introduction/introduction-to-the-FID",
               "introduction/introduction-to-this-toolkit"
             ]
           },
