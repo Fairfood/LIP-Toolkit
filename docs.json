@@ -4,8 +4,8 @@
   "name": "LIP Toolkit",
   "colors": {
     "primary": "#395542",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "light": "#395542",
+    "dark": "#395542"
   },
   "favicon": "/favicon.svg",
   "appearance": {"default": "light", "strict": true},
