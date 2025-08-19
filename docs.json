@@ -42,8 +42,13 @@
                 "pages": [
                   "process/data-collection/overview",
                   "process/data-collection/enumerator-training",
-                  "process/data-collection/procedures-and-tips-for-a-quality-interview",
-                  "process/data-collection/ethical-considerations",
+                  {
+                    "group": "Field data collection",
+                    "pages": [
+                      "process/data-collection/procedures-and-tips-for-a-quality-interview",
+                      "process/data-collection/ethical-considerations"
+                    ]
+                  },
                   "process/data-collection/data-quality-monitoring"
                 ]
               }
