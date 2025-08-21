@@ -1,0 +1,1247 @@
+---
+title: "Step 1. Cleaning"
+format: html
+editor: visual
+---
+
+```{r setup, include=FALSE}
+rm(list = ls(), envir = .GlobalEnv)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This script is a part of the Actionable Farmer Insights Toolkit, developed by Fairfood and Akvo. If you have any additional questions about the content, purpose or context of this script, please refer to the guidance document.
+
+# Read Me:
+
+This script contains all necessary steps to clean your data, calculate all needed variables and determine the Living Income Price. While most of the script is automated, there are some parts that will require your attention and input.
+
+### Preparation
+
+Load the necessary packages.
+
+```{r, include = FALSE}
+library(here); library(readxl); library(openxlsx);
+library(plyr); library(dplyr); library(tidyr); library(tidylog); library(tidyselect)
+library(stringr); library(data.table); library(reshape2)
+library(zoo);library(splitstackshape) ;library(tidyverse); library(magrittr) ; library(haven);
+library(lubridate)
+```
+
+Define functions that will be needed later in the script.
+
+```{r}
+# DATA TYPE: Convert factors to integers
+factor_to_int <- function(x){
+  # Convert factor variables to numeric by first converting to character
+  as.numeric(as.character(x))
+}
+
+# OUTLIER DETECTION: Identify and replace outliers for a numeric vector
+outlier_detection <- function(x) {
+  ifelse(
+    x > (mean(x, na.rm = TRUE) + 3 * sd(x, na.rm = TRUE)) | 
+    x < (mean(x, na.rm = TRUE) - 3 * sd(x, na.rm = TRUE)),
+    9997,  # Replace outliers
+    x       # Keep non-outlier values
+  )
+}
+
+# COUNT NON-NA VALUES: Count the number of non-NA values in a vector
+count_n <- function(x){
+  # Sum the values that are not NA (missing)
+  sum(!is.na(x))
+}
+
+# Suppress scientific notation in numerical outputs
+options(scipen = 999)
+
+```
+
+Fill in the basic information and the name of the file storing your data.
+
+```{r}
+#Fill in the basic case information.
+case = "Fairfood"
+year = "2025"
+commodity = "Cocoa"
+country = "Ghana"
+
+#The name of the file holding your data
+data_filename <- '/Users/sandra/Documents/Sierra Leone Cocoa/Code/Sierra Leone April 2025/Final Data.xlsx'  
+
+#The name of the file holding downloaded survey
+survey_filename <- '/Users/sandra/Documents/Sierra Leone Cocoa/Code/Sierra Leone April 2025/Survey LIP Sierra Leone.xlsx'          
+
+```
+
+The below code loads the data needed for analysis. Make sure the excel sheets are in the same order
+
+```{r, include = FALSE}
+# Loadig each Data excel sheet into a separate object
+Data <- read_xlsx(data_filename)                        # Always the first data sheet
+
+revenue_repeat <- read_xlsx(data_filename, sheet = 2)   
+# focus_repeat_revenue sheet
+
+gradeAB <- read_xlsx(data_filename, sheet = 3)          
+# focus_repeat_quality sheet 
+
+labour <- read_xlsx(data_filename, sheet = 4)           
+# labour_use_repeat sheet
+
+labour_act <- read_xlsx(data_filename, sheet = 5)       
+# questions_activities sheet 
+
+inputs <- read_xlsx(data_filename, sheet = 6)           
+# input_use_costs_repeat sheet
+
+#Loading Survey Questions 
+survey_questions <- read_xlsx(survey_filename, sheet = 1) %>% filter(!type %in% c("note","end_group", "begin_group", "begin_repeat", "end_repeat")) %>% select(name, label, type) %>%
+  rename("variable" = name)
+questions_choices <- read_excel ((survey_filename),sheet ="choices")
+
+
+# Identify numerical questions in the survey
+numerical_columns <- survey_questions %>%
+  filter(type == "integer" | type == "decimal") %>%
+  select("variable") %>% pull()
+```
+
+**Exchange Rate**
+
+```{r}
+#	1 USD = 22.794 SLE on March 27th 2025 --> End of data collection for this case. 
+# https://www.xe.com/currencyconverter/convert/?Amount=1&From=USD&To=SLE
+exchange_rate <- 22.794
+```
+
+**Benchmark Contextualisation**
+
+```{r}
+# Step 1: Input necessary values
+# CPI: https://tradingeconomics.com/sierra-leone/consumer-price-index-cpi
+cpi_benchmark <- 235.34                   #CPI of the month the benchmark was published
+cpi_data_collection <- 239.03             #CPI of the month of data collection or latest available
+benchmark_LCU <- 117636                   #Benchmark value (per year)
+benchmark_adults <- 2                     #Number of adults in the household according to benchmark
+benchmark_children <- 3                   #Number of children accroding to the benchmark 
+
+# Step 2: We calculate the inflation rate and adjust the benchmark 
+inflation_rate <- (cpi_data_collection - cpi_benchmark) / cpi_benchmark
+benchmark_adjusted <- benchmark_LCU * (1 + inflation_rate)
+
+# Step 3: We convert the benchmark to USD
+benchmark_USD <- benchmark_adjusted / exchange_rate
+
+# Step 4: We prepare to adjust the benchmark to reflect househsold size
+standard_equivalent <- 1 + (benchmark_adults-1)*0.5 + benchmark_children*0.3
+```
+
+# Section 1. Cleaning the data
+
+## 1. Rename variables where necessary
+
+As you can see, your data is now split between 6 different objects. This is because the LIP survey implements a repeat logic: the same questions are repeated multiple times (e.g, such as for multiple seasons, or multiple labour activities). These repeats are all a separate object and the key for joining then is \_*submission*\_\_*id.*
+
+```{r}
+Data <- Data %>%
+  rename(
+    "_submission__id" = "_id") 
+```
+
+## 2. Standard data cleaning (dates, columns, lowercase, participation, duplicates)
+
+We first remove unnecessary or completely empty columns, ensure all variable names are in lower case and remove all farmers who did not agree to participate across all data objects.
+
+```{r, include = FALSE}
+#Data sheet
+Data <- Data %>%   
+  select(-c(devicephonenum, deviceid)) %>% 
+  rename_all(tolower) %>%
+  filter(surv_consent != 0) %>%
+  select(where(~ !all(is.na(.))))
+
+#Revenue repeat sheet
+revenue_repeat <- revenue_repeat %>%
+  rename_all(tolower) %>%
+  select(where(~ !all(is.na(.)))) 
+
+#GradeAB sheet
+gradeAB <- gradeAB %>%
+  rename_all(tolower) %>%
+  select(where(~ !all(is.na(.)))) 
+
+#Inputs Sheet
+inputs <- inputs %>%
+  rename_all(tolower) %>%
+  select(where(~ !all(is.na(.)))) 
+
+#Labour activities sheet
+labour_act <- labour_act %>%
+  rename_all(tolower) %>%
+  select(where(~ !all(is.na(.)))) 
+
+#Labour Sheet
+ labour <- labour %>%
+  rename_all(tolower) %>%
+  select(where(~ !all(is.na(.)))) 
+```
+
+## 3. Adjust farm sizes
+
+We need to make sure that all land sizes are in the same unit. Depending on your data, you may need to add different units and their conversion.
+
+```{r, include = FALSE}
+# Step 1: Check how many farmers chose each option
+table(Data$f_unit_land)
+
+# Step 2: Adjust farm sizes accordingly
+Data <- Data %>%
+  mutate(f_size_hectare = case_when(f_unit_land == "Acres" ~ f_size * 0.404686, 
+                                    f_unit_land == "Squared meters" ~ 0.0001,
+                                    f_unit_land == "Hectares" ~ f_size,
+                                    TRUE ~ NA)) %>% 
+
+#If no farmers choose "Other" for land size, delete this code (also the "%>%" in row above)
+  mutate(f_size_hectare = case_when(f_unit_land_other =="Squared feet" ~ 
+                                      f_size * 0.0000092903, 
+                                    TRUE ~ NA))
+       
+         
+         
+         
+# Step 3: Adjust the sizes of land dedicated to crop production        
+
+Data <- Data %>%
+  mutate(f_focus_crop_size_hectare = case_when(f_unit_land == "Acres" ~ 
+                                                 f_focus_crop_size * 0.404686,
+                                          f_unit_land == "Squared meters" ~ NA, 
+                                          f_unit_land == "Hectares" ~ f_focus_crop_size,
+                                          TRUE ~ NA)) %>%
+#If no farmers choose "Other" for land size, delete this code (also the "%>%" in row above)
+  mutate(f_focus_crop_size_hectare = case_when(f_unit_land_other =="Squared feet" ~ 
+                                      f_focus_crop_size_hectare * 0.0000092903, 
+                                    TRUE ~ f_focus_crop_size_hectare))
+
+```
+
+## 4. Correct quantities
+
+This code ensures that quantities produced, sold, lost and consumed by farmers are set to missing values if both production and sale are 0.
+
+```{r, include = FALSE}
+revenue_repeat <- revenue_repeat %>%
+  mutate(f_focus_quant_prod = ifelse(f_focus_quant_prod == 0 & f_focus_quant_sold == 0, 
+                                     NA, f_focus_quant_prod),
+         f_focus_quant_sold = ifelse(f_focus_quant_prod == 0 & f_focus_quant_sold == 0, 
+                                     NA, f_focus_quant_sold),
+         f_focus_quant_lost = ifelse(f_focus_quant_prod == 0 & f_focus_quant_sold == 0, 
+                                     NA, f_focus_quant_lost), 
+        f_focus_quant_sold_premium = ifelse(f_focus_quant_prod == 0 & f_focus_quant_sold == 0, 
+                                            NA, f_focus_quant_sold_premium))
+```
+
+## 6. Other variables
+
+Identify the "other" variables, and combine the values with their parent. Then the "other" variables are removed.
+
+```{r, include = FALSE}
+
+#Revenue Repeat 
+variables_other <- revenue_repeat %>% 
+  select(ends_with("_other"), ends_with("_other2")) %>% 
+  names() 
+
+for(other in variables_other){
+  
+  if(any(names(revenue_repeat) %in% gsub("_other$|_other2$", "", other))){
+    
+    # Combine "other" variables with their parents
+    revenue_repeat <- revenue_repeat %>%
+      unite(!!gsub("_other$|_other2$", "", other), 
+            c(gsub("_other$|_other2$", "", other), all_of(other)), 
+            sep="|", remove=FALSE, na.rm=TRUE) %>%
+      select(-other)
+  }
+}
+
+# Inputs
+
+variables_other <- inputs %>% 
+  select(ends_with("_other"), ends_with("_other2")) %>% 
+  names() 
+
+for(other in variables_other){
+  
+  if(any(names(inputs) %in% gsub("_other$|_other2$", "", other))){
+    
+    # Combine "other" variables with their parents
+    inputs <- inputs %>%
+      unite(!!gsub("_other$|_other2$", "", other), 
+            c(gsub("_other$|_other2$", "", other), all_of(other)), 
+            sep="|", remove=FALSE, na.rm=TRUE) %>%
+      select(-other)
+  }
+}
+
+#Labour
+variables_other <- labour %>% 
+  select(ends_with("_other"), ends_with("_other2")) %>% 
+  names() 
+
+for(other in variables_other){
+  
+  if(any(names(labour) %in% gsub("_other$|_other2$", "", other))){
+    
+    # Combine "other" variables with their parents
+    labour <- labour %>%
+      unite(!!gsub("_other$|_other2$", "", other), 
+            c(gsub("_other$|_other2$", "", other), all_of(other)), 
+            sep="|", remove=FALSE, na.rm=TRUE) %>%
+      select(-other)
+  }
+}
+
+#Data
+
+variables_other <- Data %>% 
+  select(ends_with("_other"), ends_with("_other2")) %>% 
+  names() 
+
+for(other in variables_other){
+  
+  if(any(names(Data) %in% gsub("_other$|_other2$", "", other))){
+    
+    # Combine "other" variables with their parents
+    Data <- Data %>%
+      unite(!!gsub("_other$|_other2$", "", other), 
+            c(gsub("_other$|_other2$", "", other), all_of(other)), 
+            sep="|", remove=FALSE, na.rm=TRUE) %>%
+      select(-other)
+  }
+}
+```
+
+# Section 2. Actual income calculation
+
+## 1. Transform Unit Measurements
+
+First, let's handle the transformation of unit measurements for production, sale and losses.\
+\
+We first calculate a variable *cal_focus_measurement*\_ (prod/sold/lost), which stores the conversion rate from whatever measurement unit farmers use to kilograms.
+
+### Storing conversion to kg
+
+```{r}
+# Production ______________________________________________________________________________
+# Step 1: Check what measurements farmers use for production
+table(revenue_repeat$f_focus_measurement_prod)
+
+# Step 2: Store conversion to kg
+revenue_repeat <- revenue_repeat %>%
+  mutate(cal_focus_measurement_prod = case_when(f_focus_measurement_prod == "kg" ~ 1,
+                                                f_focus_measurement_prod == "20kg Bag" ~ 20,
+                                                TRUE ~ NA))
+
+
+# Sale ________________________________________________________________________________________
+# Step 1: Check what measurements farmers use for sale
+table(revenue_repeat$f_focus_measurement_sold)
+
+# Step 2: Store conversion to kg
+revenue_repeat <- revenue_repeat %>%
+  mutate(cal_focus_measurement_sold = case_when(f_focus_measurement_sold == "kg" ~ 1,
+                                                f_focus_measurement_sold == "20kg Bag" ~20,
+                                                TRUE ~ NA))
+
+# Step 3; Check what measurements farmers use for premium sale
+table(revenue_repeat$f_focus_measurement_sold_premium)
+
+# Step 4: Store conversion to kg
+revenue_repeat <- revenue_repeat %>%
+  mutate(cal_focus_measurement_sold_premium = case_when(f_focus_measurement_sold_premium == 
+                                                          "kg" ~ 1,
+                                                        f_focus_measurement_sold_premium == 
+                                                          "20kg Bag" ~20,
+                                                        TRUE ~ NA))
+# Loss ________________________________________________________________________________________
+# Step 1: Check what measurements farmers use for loss
+table(revenue_repeat$f_focus_measurement_lost)
+
+# Step 2: Store conversion to kg
+
+revenue_repeat <- revenue_repeat %>%
+ mutate(cal_focus_measurement_lost = case_when(f_focus_measurement_lost== "kg" ~ 1,
+                                               f_focus_measurement_lost == "20kg Bag" ~20,
+                                                TRUE ~ NA))
+```
+
+### Calculating quantities in kilograms
+
+Once we have the conversion to kg stored as a variable, we can easily calculate all quantities.
+
+```{r}
+revenue_repeat <- revenue_repeat %>%
+  # Step 1: Convert relevant columns to numeric
+  mutate(across(c(f_focus_quant_prod, cal_focus_measurement_prod, 
+                  f_focus_quant_sold, cal_focus_measurement_sold, 
+                  f_focus_quant_lost, cal_focus_measurement_lost,
+                  f_focus_quant_sold_premium, cal_focus_measurement_sold_premium,
+                  f_focus_avg_price), as.numeric)) %>%
+  # Step 2: Perform calculations
+  mutate(
+    # Calculate the product quantity in kg
+    cal_focus_quant_prod_kg = f_focus_quant_prod * cal_focus_measurement_prod,
+    
+    # Calculate the sold quantity in kg
+    cal_focus_quant_sold_kg = f_focus_quant_sold * cal_focus_measurement_sold,
+    
+    # Calculate the lost quantity in kg
+    cal_focus_quant_lost_kg = f_focus_quant_lost * cal_focus_measurement_lost,
+    
+    # Calculate the sold premium quantity in kg
+    cal_focus_quant_sold_premium_kg = ifelse(
+      is.na(f_focus_quant_sold_premium * cal_focus_measurement_sold_premium), 
+      0, f_focus_quant_sold_premium * cal_focus_measurement_sold_premium))
+
+
+```
+
+## 2. Price per kg
+
+Two things to be aware in this code:
+
+1.  If farmers do not indicate how much they have sold, or they have not sold any, the price will be set to a missing value.
+2.  In the survey contextualisation sheet, you have determined possible ranges for price per kg. These should be used in step 3 to replace all values, which are incredibly unlikely. These values will be replaced by sample median price.
+
+### Regular Price
+
+```{r}
+highest_price <- 100 #Put your value here
+lowest_price <- 10 #Put your value here
+
+revenue_repeat <- revenue_repeat %>%
+  mutate(
+# Step 1: Calculate the price per kg
+    cal_focus_price_kg = f_focus_avg_price / cal_focus_measurement_sold,
+    
+# Step 2: Set price per kg to NA if the sold quantity is NA or 0
+    cal_focus_price_kg = ifelse(is.na(cal_focus_quant_sold_kg) | cal_focus_quant_sold_kg == 0, 
+                                NA, cal_focus_price_kg),
+    
+# Step 3: Replace all values outside the possible range with the median
+
+    cal_focus_price_kg = ifelse(cal_focus_price_kg > highest_price | 
+                                  cal_focus_price_kg < lowest_price,       
+                            median(cal_focus_price_kg,na.rm=TRUE), cal_focus_price_kg))
+```
+
+### Premium Price
+
+```{r}
+
+highest_premium_price <- 300 #Put your value here
+lowest_premium_price <- 40 #Put your value here
+
+
+revenue_repeat <- revenue_repeat %>%
+  mutate(
+    # Calculate premium price per kg
+    cal_focus_premium_price_kg = f_focus_premium_price / cal_focus_measurement_sold_premium,
+    
+    # Set price per kg to NA if the sold quantity is NA or 0
+    cal_focus_premium_price_kg = ifelse(is.na(cal_focus_quant_sold_premium_kg) | 
+                                        cal_focus_quant_sold_premium_kg == 0, 
+                                        NA, cal_focus_premium_price_kg),
+    
+# Replace NA price per kg with the median price per kg if the sold quantity is greater than 0
+    cal_focus_premium_price_kg = ifelse(cal_focus_premium_price_kg > highest_premium_price|
+                                          cal_focus_premium_price_kg < lowest_premium_price,
+                                             median(cal_focus_premium_price_kg,na.rm=TRUE), 
+                                             cal_focus_premium_price_kg))
+```
+
+# Outlier Analysis
+
+Now that we have harmonised units across variables (land in hectares, quantities and prices in kg), we can carry out an outlier analysis.
+
+We remove all values that deviate more than three standard deviations from the indicator mean. Additionally we also replace the codes "9998" and "9999" with the missing value symbol, so that they do not further skew the analysis.
+
+```{r}
+#Data sheet
+# Apply the outlier detection function to numerical columns
+numerical_columns <- names(Data %>% select_if(is.numeric)) %>%
+  .[!grepl("/\\d+$", .)] %>%
+   .[sapply(Data[.], function(x) length(unique(x)) > 2)]  # Exclude binary columns
+
+Data <- Data %>%
+    mutate_at(vars(numerical_columns), funs(outlier_detection)) %>%
+  
+  # Replace specific values (9999, 9998, 9997) with NA for numeric columns
+  mutate_if(is.numeric, list(~na_if(., 9999))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9998))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9997))) %>%
+
+  # Replace "I don't know" or "I prefer not to say" with NA for character columns
+  mutate_if(is.character, list(~na_if(., "i don't know"))) %>%
+  mutate_if(is.character, list(~na_if(., "i prefer not to say"))) %>%
+  mutate_if(is.character, list(~na_if(., "9999"))) %>%
+  mutate_if(is.character, list(~na_if(., "9998"))) %>%
+  mutate_if(is.character, list(~na_if(., "9997")))
+
+#Revenue repeat sheet
+# Apply the outlier detection function to numerical columns
+
+numerical_columns <- names(revenue_repeat %>% select_if(is.numeric)) %>%
+  .[!grepl("/\\d+$", .)]  %>%
+   .[sapply(revenue_repeat[.], function(x) length(unique(x)) > 2)]
+
+revenue_repeat <- revenue_repeat %>%
+    mutate_at(vars(numerical_columns), funs(outlier_detection)) %>%
+  
+  # Replace specific values (9999, 9998, 9997) with NA for numeric columns
+  mutate_if(is.numeric, list(~na_if(., 9999))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9998))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9997))) %>%
+  
+  # Replace "I don't know" or "I prefer not to say" with NA for character columns
+  mutate_if(is.character, list(~na_if(., "i don't know"))) %>%
+  mutate_if(is.character, list(~na_if(., "i prefer not to say"))) %>%
+  mutate_if(is.character, list(~na_if(., "9999"))) %>%
+  mutate_if(is.character, list(~na_if(., "9998"))) %>%
+  mutate_if(is.character, list(~na_if(., "9997")))
+
+#GradeAB sheet
+
+numerical_columns <- names(gradeAB %>% select_if(is.numeric)) %>%
+  .[!grepl("/\\d+$", .)]  %>%
+   .[sapply(gradeAB[.], function(x) length(unique(x)) > 2)]
+
+# Apply the outlier detection function to numerical columns
+gradeAB <- gradeAB %>%
+    mutate_at(vars(numerical_columns), funs(outlier_detection)) %>%
+  
+  # Replace specific values (9999, 9998, 9997) with NA for numeric columns
+  mutate_if(is.numeric, list(~na_if(., 9999))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9998))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9997))) %>%
+
+  # Replace "I don't know" or "I prefer not to say" with NA for character columns
+  mutate_if(is.character, list(~na_if(., "i don't know"))) %>%
+  mutate_if(is.character, list(~na_if(., "i prefer not to say"))) %>%
+  mutate_if(is.character, list(~na_if(., "9999"))) %>%
+  mutate_if(is.character, list(~na_if(., "9998"))) %>%
+  mutate_if(is.character, list(~na_if(., "9997")))
+
+#Inputs Sheet
+# Apply the outlier detection function to numerical columns
+numerical_columns <- names(inputs %>% select_if(is.numeric)) %>%
+  .[!grepl("/\\d+$", .)]  %>%
+   .[sapply(inputs[.], function(x) length(unique(x)) > 2)]
+
+inputs <- inputs %>%
+    mutate_at(vars(numerical_columns), funs(outlier_detection)) %>%
+  
+  # Replace specific values (9999, 9998, 9997) with NA for numeric columns
+  mutate_if(is.numeric, list(~na_if(., 9999))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9998))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9997))) %>%
+
+  # Replace "I don't know" or "I prefer not to say" with NA for character columns
+  mutate_if(is.character, list(~na_if(., "i don't know"))) %>%
+  mutate_if(is.character, list(~na_if(., "i prefer not to say"))) %>%
+  mutate_if(is.character, list(~na_if(., "9999"))) %>%
+  mutate_if(is.character, list(~na_if(., "9998"))) %>%
+  mutate_if(is.character, list(~na_if(., "9997")))
+
+#Labour activities sheet
+# Apply the outlier detection function to numerical columns
+numerical_columns <- names(labour_act %>% select_if(is.numeric)) %>%
+  .[!grepl("/\\d+$", .)]  %>%
+   .[sapply(labour_act[.], function(x) length(unique(x)) > 2)]
+
+labour_act <- labour_act %>%
+    mutate_at(vars(numerical_columns), funs(outlier_detection)) %>%
+  
+  # Replace specific values (9999, 9998, 9997) with NA for numeric columns
+  mutate_if(is.numeric, list(~na_if(., 9999))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9998))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9997))) %>%
+
+  # Replace "I don't know" or "I prefer not to say" with NA for character columns
+  mutate_if(is.character, list(~na_if(., "i don't know"))) %>%
+  mutate_if(is.character, list(~na_if(., "i prefer not to say"))) %>%
+  mutate_if(is.character, list(~na_if(., "9999"))) %>%
+  mutate_if(is.character, list(~na_if(., "9998"))) %>%
+  mutate_if(is.character, list(~na_if(., "9997")))
+
+#Labour Sheet
+ # Apply the outlier detection function to numerical columns
+numerical_columns <- names(labour %>% select_if(is.numeric)) %>%
+  .[!grepl("/\\d+$", .)]  %>%
+   .[sapply(labour[.], function(x) length(unique(x)) > 2)]
+
+labour <- labour %>%
+    mutate_at(vars(numerical_columns), funs(outlier_detection)) %>%
+  
+  # Replace specific values (9999, 9998, 9997) with NA for numeric columns
+  mutate_if(is.numeric, list(~na_if(., 9999))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9998))) %>%
+  mutate_if(is.numeric, list(~na_if(., 9997))) %>%
+
+  # Replace "I don't know" or "I prefer not to say" with NA for character columns
+  mutate_if(is.character, list(~na_if(., "i don't know"))) %>%
+  mutate_if(is.character, list(~na_if(., "i prefer not to say"))) %>%
+  mutate_if(is.character, list(~na_if(., "9999"))) %>%
+  mutate_if(is.character, list(~na_if(., "9998"))) %>%
+  mutate_if(is.character, list(~na_if(., "9997")))
+
+
+
+```
+
+### Final Price Adjustments
+
+Price is the only variable that we replace by the sample median. All other values get replaced by the missing value symbol.
+
+```{r}
+revenue_repeat <- revenue_repeat %>%
+  mutate(cal_focus_price_kg = ifelse(cal_focus_quant_sold_kg > 0 &
+                                  is.na(cal_focus_price_kg), 
+                                median(cal_focus_price_kg, na.rm = TRUE), cal_focus_price_kg),
+          cal_focus_premium_price_kg = ifelse(cal_focus_quant_sold_premium_kg > 0 &
+                                        is.na(cal_focus_premium_price_kg), 
+                                        median(cal_focus_premium_price_kg, na.rm = TRUE),
+                                        cal_focus_premium_price_kg))
+```
+
+## 3. Revenue Calculation
+
+We now calculate the revenue from cocoa, based on calculated quantities and prices.
+
+```{r}
+revenue_repeat <- revenue_repeat %>%
+ mutate(
+  cal_focus_revenue =
+   replace_na(cal_focus_quant_sold_kg, 0) * replace_na(cal_focus_price_kg, 0) +
+   replace_na(cal_focus_quant_sold_premium_kg, 0) * replace_na(cal_focus_premium_price_kg, 0))
+```
+
+At the end of this analysis, we want to end up with a single dataset instead of 6 separate objects. This means that once we are done performing all calculations per data object it is ready to be merged with the main set called "Data".
+
+The revenue calculation is the final process in the revenue_repeat data object and the following code merges the data together.
+
+```{r}
+cols_to_combine <- c('f_focus_measurement_prod', 'f_focus_measurement_sold', 'f_focus_process_sold', 'f_focus_diff_quality', 'f_focus_type_sold', 'f_focus_measurement_sold_premium',  'f_focus_buyer', 'f_focus_exporter_name', 'f_focus_lost_yn', 'f_focus_measurement_lost')
+
+
+production <- revenue_repeat %>%
+  group_by(`_submission__id`) %>%
+  
+# Step 1: first, we specify what needs to happen with numerical variables
+  #Quantities and revenue are summed up
+  summarise(cal_focus_quant_prod_kg = sum(cal_focus_quant_prod_kg, na.rm = TRUE), 
+            cal_focus_quant_sold_kg = sum(cal_focus_quant_sold_kg, na.rm = TRUE),
+            cal_focus_quant_lost_kg = sum(cal_focus_quant_lost_kg, na.rm = TRUE),
+            cal_focus_quant_sold_premium_kg =sum(cal_focus_quant_sold_premium_kg,na.rm = TRUE),
+            cal_focus_revenue = sum(cal_focus_revenue, na.rm = TRUE),
+            
+  #Prices are averaged out       
+            f_focus_avg_price = ifelse(is.nan(mean(f_focus_avg_price, na.rm = TRUE)), 
+                                       NA, mean(f_focus_avg_price, na.rm = TRUE)),
+            cal_focus_price_kg = ifelse(is.nan(mean(cal_focus_price_kg, na.rm = TRUE)),
+                                        NA, mean(cal_focus_price_kg, na.rm = TRUE)),
+            f_focus_premium_price = ifelse(is.nan(mean(f_focus_premium_price, na.rm = TRUE)),
+                                           NA, mean(f_focus_premium_price, na.rm = TRUE)),
+            cal_focus_premium_price_kg = ifelse(is.nan(mean(cal_focus_premium_price_kg, na.rm = TRUE)),
+                                                NA, mean(cal_focus_premium_price_kg, na.rm = TRUE)),
+
+# Step 2: we keep all answers (for main and off-peak season). If they are different we divide them with ||       
+            
+             across(all_of(cols_to_combine),
+                    ~ {
+                      v <- na.omit(.x)             # drop any NAs
+                      if (length(v) == 2 && v[1] == v[2]) {
+                        v[1]                       # same twice → keep once
+                        } else {
+                          paste(v, collapse = " || ") # else collapse with " | "
+                        }
+                      }),
+    .groups = "drop")
+
+
+# Now perform your joins neatly and uniformly:
+Data <- left_join(Data,production, by = "_submission__id") 
+```
+
+## 4. Productivity
+
+Calculate productivity by dividing the production by farm size.
+
+```{r}
+Data <- Data %>%
+  mutate(across(c(cal_focus_quant_prod_kg, f_focus_crop_size_hectare), as.numeric)) %>%
+  mutate(cal_focus_productivity_kg_hectare = ifelse(f_focus_crop_size_hectare > 0,
+                                          cal_focus_quant_prod_kg / f_focus_crop_size_hectare, 
+                                          NA))
+```
+
+## 5. Input Costs Calculation
+
+Calculate input costs efficiently for each season.
+
+```{r}
+summary_inputs <- inputs %>%
+  # Convert and replace NA values for production costs and input costs
+  mutate(across(starts_with("f_inputs_costs"), ~replace(as.numeric(.), is.na(.), 0))) %>%
+  group_by(`_submission__id`) %>%
+  summarise(
+            `f_inputs_usage_types/1` = max(`f_inputs_usage_types/1`),
+            `f_inputs_usage_types/2` = max(`f_inputs_usage_types/2`),
+            `f_inputs_usage_types/3` = max(`f_inputs_usage_types/3`),
+            `f_inputs_usage_types/4` = max(`f_inputs_usage_types/4`),
+            `f_inputs_usage_types/5` = max(`f_inputs_usage_types/5`),
+            `f_inputs_usage_types/6` = max(`f_inputs_usage_types/6`), 
+             cal_inputs_costs = sum(across(starts_with("f_inputs_costs")), na.rm = TRUE),
+            cal_inputs_costs_seeds = sum(f_inputs_costs_seeds_season, na.rm = TRUE), 
+            cal_inputs_costs_fertilizer = sum(f_inputs_costs_fertilizer_season, na.rm = TRUE), 
+            cal_inputs_costs_chemicals = sum(f_inputs_costs_chemicals_season, na.rm = TRUE))
+```
+
+## 6. Other Costs Calculation
+
+Calculate other related costs.
+
+```{r}
+Data <- Data %>%
+  mutate(across(starts_with("f_focus_cost"), ~replace(as.numeric(.), is.na(.), 0)),
+         cal_focus_other_costs = rowSums(across(starts_with("f_focus_cost")), na.rm = TRUE))
+```
+
+## 7. Labour costs calculation
+
+From experience, we know that collecting information on labour cost is often difficult. There are three ways you can derive the cost of labour:
+
+1.  [Calculating temporary labour cost based on the number of workers, number of days worked and daily remuneration and then adding cost for permanent labourers and labour groups.]{underline}
+2.  Variable *f_focus_labour_costs_season: "*On average, how much do you spend on labour costs for cofee during a season?
+
+It is considered best practice to start with version 1 and if the results seem highly unrealistic, progress withe version 2.
+
+### Version 1: Calculated Temporary Labour
+
+```{r}
+temporary_labour <- labour_act %>%  
+  mutate(across(starts_with("f_crop_temporary_labourer_"), 
+                ~replace(as.numeric(.), is.na(.), 0))) %>%       
+  mutate(cal_labour_temporary_cost = f_labour_temporary_workers_activity * 
+                                       f_labour_temporary_wage_per_day_activity * 
+                                       f_labour_days_activity) %>%
+  group_by(`_submission__id`) %>%
+  summarise(cal_labour_temporary_cost = sum(cal_labour_temporary_cost, na.rm = TRUE))
+
+
+    
+# The follwoing code keeps on combining the separate data objects
+
+one_hot <- c('f_crop_labour_types/0', 'f_crop_labour_types/1', 'f_crop_labour_types/2', 'f_crop_labour_types/3', 'f_crop_labour_types/4', 'f_crop_labour_types/5', 'f_crop_labour_types/6', 'f_crop_labour_types/7', 'f_crop_labour_types/8', 'f_crop_labour_types/9', 'f_crop_labour_types/10', 'f_crop_labour_types/11', 'f_crop_labour_types/12', 'f_crop_labour_types/13', 'f_crop_labour_types/77', 'f_crop_labour_types/9999', 'f_crop_labour_types/9998', 'f_crop_labourer_types/1', 'f_crop_labourer_types/2', 'f_crop_labourer_types/3', 'f_crop_labourer_types/4', 'f_crop_labourer_types/5', 'f_crop_labourer_types/6', 'f_crop_labourer_types/77')
+cols_to_combine <- c('f_crop_labour_types', 'f_crop_labourer_types')
+
+
+# Now we sum up the costs for permanent and group labourers for all reported seasons                  
+permanent_group_labour <- labour %>%    
+  mutate(f_crop_labour_permanent_costs = replace(as.numeric(f_crop_labour_permanent_costs), 
+                                                 is.na(f_crop_labour_permanent_costs), 0)) %>%
+  group_by(`_submission__id`) %>%
+  summarise(f_crop_labour_permanent_costs = sum(f_crop_labour_permanent_costs, na.rm = TRUE),
+         f_crop_groups_labourer_costs = sum(f_crop_groups_labourer_costs, na.rm = TRUE),
+         f_focus_labour_costs = sum(f_focus_labour_costs_season, na.rm = TRUE),
+         cal_labour_cost_v2 = replace_na(f_focus_labour_costs, 0),
+         across(all_of(one_hot), ~ ifelse(sum(.x, na.rm = TRUE) > 0, 1, 0)),
+         across(all_of(cols_to_combine),
+                    ~ {
+                      v <- na.omit(.x)             # drop any NAs
+                      if (length(v) == 2 && v[1] == v[2]) {
+                        v[1]                       # same twice → keep once
+                        } else {
+                          paste(v, collapse = " || ") # else collapse with " | "
+                        }
+                      }),
+    .groups = "drop")
+
+
+# We combine the data on temporary, permanent and group labour, and calculate labour cost
+
+summary_labour <- left_join(permanent_group_labour,temporary_labour, by = "_submission__id")%>%
+  # Calculate labour cost per season and replace NA values with zero. 
+  mutate(cal_labour_cost_v1 = replace_na(f_crop_labour_permanent_costs,0) + 
+                           replace_na(cal_labour_temporary_cost, 0) + 
+                           replace_na(f_crop_groups_labourer_costs,0))
+```
+
+### Version 2: Single variable
+
+This has already been prepared during the merging in version 1 code as cal_labour_cost_v2.
+
+### Comparison:
+
+Use the below code to compare the results you are getting from all three methods to determine the most suitable for your scenario.
+
+```{r}
+# Comparison
+print("Means")
+mean(summary_labour$cal_labour_cost_v1, na.rm = TRUE)
+mean(summary_labour$cal_labour_cost_v2, na.rm = TRUE)
+
+print("Medians")
+median(summary_labour$cal_labour_cost_v1, na.rm = TRUE)
+median(summary_labour$cal_labour_cost_v2, na.rm = TRUE)
+
+# option 1
+ggplot(summary_labour, aes(x = cal_labour_cost_v1)) +
+  geom_histogram(binwidth = 10000, fill = "#59c7d6", color = "black", alpha = 0.7) +
+  labs(title = "VERSION 1: Distribution of Labour Cost (LCU)",
+       x = "Labour Cost (LCU)",
+       y = "Frequency") +
+  theme_light() +
+  theme(axis.title.y = element_text(size = 12, face = "bold", margin = margin(r = 10)),
+        axis.title.x = element_text(size = 12, face = "bold"),
+        axis.text.y = element_text(size = 12),
+        axis.text.x = element_text(size = 12),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA))
+
+
+# Option 2
+ggplot(summary_labour, aes(x = cal_labour_cost_v2)) +
+  geom_histogram(binwidth = 1000, fill = "#59c7d6", color = "black", alpha = 0.7) +
+  labs(title = "VERSION 2: Distribution of Labour Cost (LCU)",
+       x = "Labour Cost (LCU)",
+       y = "Frequency") +
+  theme_light() +
+  theme(axis.title.y = element_text(size = 12, face = "bold", margin = margin(r = 10)),
+        axis.title.x = element_text(size = 12, face = "bold"),
+        axis.text.y = element_text(size = 12),
+        axis.text.x = element_text(size = 12),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA))
+
+
+
+# Whichever version you choose becomes cal_labour_cost and other should be deleted
+# This is an exmaple if you chose version 1
+summary_labour$cal_labour_cost <- summary_labour$cal_labour_cost_v1
+summary_labour$cal_labour_cost_v2 <- NULL
+
+```
+
+## 8. Merging Datasets
+
+```{r}
+Data <- left_join(Data, summary_labour, by = "_submission__id") 
+Data <- left_join(Data, summary_inputs, by = "_submission__id")
+```
+
+## 9. Total Focus Crop Cost Calculation
+
+```{r}
+Data <- Data %>%
+  mutate(cal_focus_cost = cal_labour_cost + cal_inputs_costs + cal_focus_other_costs,
+         cal_focus_cost = replace_na(cal_focus_cost, 0))
+```
+
+## 9. Net Income Focus Crop
+
+Similarly, calculate the net income.
+
+```{r}
+Data <- Data %>%
+  mutate(cal_focus_income = cal_focus_revenue - cal_focus_cost,
+         cal_focus_income = replace_na(cal_focus_income, 0))
+```
+
+## 10. Other Crop Income Calculation
+
+We now calculate income from other crops. Binary variables f_types_crops/(0,1,2...n) correspond to 1 if farmers have chosen a given crop. If in you survey choices sheets "Banana" corresponds to value 1, then f_types_crops/1 will equal 1. Similarly, f_types_crops/0 means farmers do not grow any other crops. Any input from those farmers on costs or incomes from other crops are therefore considered incorrect.\
+\
+Step 1 of the following code first changes all those contradicting values to missing if they are present.\
+Step 2 calculates income from other crops.
+
+```{r}
+# Step 1: Update specified variables to missing values if f_types_crops/0 (none) is equal to 1
+Data <- Data %>%
+  mutate(across(
+    c(f_othermaincrop_1_quant_sold, f_othermaincrop_1_meas_sold,
+      f_othermaincrop_1_inc_sold, f_othermaincrop_1_price, f_othermaincrop_2_quant_sold, 
+      f_othermaincrop_2_meas_sold, f_othermaincrop_2_inc_sold, f_othermaincrop_2_price, 
+      f_other_crop_income),
+    ~ if_else(`f_types_crops/0` == 1, NA, .)  # Set to NA if f_types_crops/0 is 1
+  )) %>%
+
+# Step 2: Calculate income from other crops
+  mutate(across(
+    c(f_othermaincrop_1_inc_sold, f_othermaincrop_2_inc_sold, f_other_crop_income, 
+      f_intercrop_net_earning),
+    ~ replace(as.numeric(.), is.na(.), 0)
+  ),
+  cal_other_crop_income = rowSums(select(., f_othermaincrop_1_inc_sold, 
+                                         f_othermaincrop_2_inc_sold, f_other_crop_income, 
+                                         f_intercrop_net_earning), na.rm = TRUE),
+  cal_other_crop_income = replace_na(cal_other_crop_income, 0))
+
+```
+
+## 11. Livestock income calculation
+
+```{r}
+Data <- Data %>%
+  mutate(across(c(f_livestock_nr_hired_labourers, f_livestock_days_hiredlabour, 
+                  f_livestock_wages_hiredlabour, f_livestock_costs_other, 
+                  f_livestock_revenue_total), ~replace(as.numeric(.), is.na(.), 0)),
+         cal_livestock_cost = f_livestock_nr_hired_labourers * f_livestock_days_hiredlabour * 
+                              f_livestock_wages_hiredlabour + f_livestock_costs_other,
+         cal_livestock_income = f_livestock_revenue_total - cal_livestock_cost,
+         cal_livestock_income = replace_na(cal_livestock_income, 0))
+
+```
+
+## 12. General Farm Costs Calculation
+
+```{r}
+Data <- Data %>%
+  mutate(
+    # Replace NA with 0 for specified columns
+    across(c(f_materials_other_costs, ends_with("_equip_costs")), ~replace(as.numeric(.), 
+                                                                           is.na(.), 0)),
+    
+    # Calculate equipment costs
+    cal_equipment_costs = f_nonmech_equip_costs + f_materials_other_costs,
+    
+    # Replace NA with 0 for loan-related columns
+    across(c(hh_loan_one_size, hh_loan_one_value_interest, 
+             hh_loan_two_size, hh_loan_two_value_interest), 
+             ~replace(as.numeric(.), is.na(.), 0)),
+    
+    # Calculate loan costs
+    loan_1_cost = ifelse(hh_loan_one_value_interest == 0, 
+                         0, hh_loan_one_size / (100 / hh_loan_one_value_interest)),
+    loan_2_cost = ifelse(hh_loan_two_value_interest == 0, 
+                       0, hh_loan_two_size / (100 / hh_loan_two_value_interest)),
+    
+    # Sum loan costs
+    cal_farm_costs_loans = loan_1_cost + loan_2_cost,
+    
+    # Calculate general farm costs including cooperative fee
+    cal_farm_costs_general = cal_equipment_costs + cal_farm_costs_loans + f_coop_fee +
+      f_land_costs,
+    
+    # Replace NA with 0 for general farm costs
+    cal_farm_costs_general = replace_na(cal_farm_costs_general, 0)
+  ) %>%
+  
+  # Remove temporary loan cost columns
+  select(-c(loan_1_cost, loan_2_cost))
+
+```
+
+## 13. Off-farm and other income calculation
+
+```{r}
+# Step 1: Define other income columns
+other_income_cols <- c("f_nonfarm_enterpr_income_month", 
+                 "f_income_offfarmlabour_month",
+                 "f_income_other_remittances_month",
+                 "f_income_other_credit_month", 
+                 "f_income_other_month", 
+                 "f_income_other_valueaddactivities_month",
+                 "f_income_other_seeds_seedlings_month")
+
+# Step 2: Convert to numeric and replace NAs with 0
+Data[other_income_cols] <- lapply(Data[other_income_cols], function(x) {
+  x <- as.numeric(x)
+  replace(x, is.na(x), 0)
+})
+
+# Step 3: Calculate cal_offfarm_income
+Data$cal_offfarm_income <- 12 * rowSums(Data[other_income_cols], na.rm = TRUE)
+```
+
+## 14. Farm income calculation
+
+```{r}
+Data <- Data %>%
+  mutate(cal_farm_income = cal_focus_income + cal_other_crop_income + cal_livestock_income - 
+                           cal_farm_costs_general,
+         cal_farm_income = replace_na(cal_farm_income, 0))
+```
+
+## 15. Actual income calculation
+
+```{r}
+Data <- Data %>%
+  mutate(cal_actual_income = cal_focus_income + cal_other_crop_income + cal_livestock_income + 
+                             cal_offfarm_income - cal_farm_costs_general,
+         cal_actual_income = ifelse(is.na(cal_focus_income) | cal_focus_income == 0 |
+                                      cal_focus_quant_sold_kg == 0, NA, cal_actual_income))
+```
+
+## 16. Diversification Ratio
+
+We calculate the diversification ratio using a revenue-based approach, which involves dividing the revenue from the primary commodity by the total household revenues.
+
+```{r}
+# Preferred approach for calculating diversification ratio
+Data <- Data %>%
+  # Calculate total income
+  mutate(total_income = cal_focus_income + cal_other_crop_income + 
+                        cal_livestock_income + cal_offfarm_income) 
+
+Data <- Data %>%
+  
+  # Calculate diversification ratio (v1)
+  mutate(diversification_ratio = ifelse(total_income == 0, 
+                                        0, cal_focus_revenue / total_income),
+         diversification_ratio = ifelse(is.na(diversification_ratio), 
+                                        0, diversification_ratio)) 
+```
+
+## 
+
+# Section 3. Preparing variables for Calculating LIP
+
+## 3.1 Introduction
+
+We require several components for LIP calculation. We also identify the required units. Please note that for your analysis some changes may still need to happen based on the clean dataset. In our case we work with kg's, hectares and \$.
+
+-   **Total household size**
+
+-   **Nr of adults** (if using an Anker & Anker Living income benchmark)
+
+-   **Production costs primary commodity/per area unit (total \$)**
+
+-   **Farm size primary commodity (hectare)**
+
+-   **Diversification ratio (share of income from primary commodity)**
+
+-   **Yield (kg/hectare)**
+
+-   **Farm gate price primary commodity (\$/kg)**
+
+-   Living income benchmark (\$/household/year -\> transformations required)
+
+We use the prototype to calculate the LIP but the bold values need to come from our dataset.
+
+## 3.2 Production costs
+
+We calculate the production, and need to change from SLE to USD and from total to per kg.
+
+```{r}
+Data <- Data %>%
+  mutate (cal_focus_cost_usd =cal_focus_cost/exchange_rate,
+          cal_focus_cost_usd_kg = ifelse(cal_focus_quant_prod_kg == 0, 
+                                         NA,
+                                         cal_focus_cost_usd / cal_focus_quant_prod_kg))
+ggplot(Data, aes(x = cal_focus_cost_usd_kg)) +
+  geom_histogram(binwidth = 0.1, fill = "#59c7d6", color = "black", alpha = 0.7) +
+  theme_light() +
+  theme(axis.title.y = element_text(size = 12, face = "bold", margin = margin(r = 10)),
+        axis.title.x = element_text(size = 12, face = "bold"),
+        axis.text.y = element_text(size = 12),
+        axis.text.x = element_text(size = 12),
+        plot.title = element_text(size = 12, face = "bold"),
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA))
+```
+
+## 3.3 Farm size
+
+No don't need to do anything with farm size. We use f_focus_crop_size_hectare
+
+## 3.4 Diversification ratio
+
+We use the variable diversification_ratio
+
+```{r}
+Data <- Data %>%
+  mutate(diversification_ratio = ifelse(diversification_ratio > 1 | diversification_ratio < 0,
+                                        NA, diversification_ratio))
+```
+
+## 3.5 Yield
+
+This variable is already prepared in the clean dataset: cal_focus_productivity_kg_hectare
+
+## 3.6 Price
+
+We use the variable cal_focus_price but this has to be transferred to \$/kg
+
+```{r}
+Data <- Data %>%
+  mutate(cal_focus_price_kg_us = cal_focus_price_kg/exchange_rate)
+```
+
+# Section 4. Additional data cleaning
+
+Our cleaning of variables consists of various steps as explained in the White Paper and the Guidance Document.
+
+1.  Address obvious mistakes (done in section 1)
+
+2.  Apply parameter screening based on input from the contextualisation sheet form (Part 2)
+
+3.  If outliers persists, apply the outlier detection method, ignoring the variables used for parameter screening. (Done in section 1, because the below parameters are heavily influenced by that).
+
+## 4.2 Parameter screening
+
+The below code for farm size and yield is an example of what parameter screening based on established thresholds may look like. Input your own values that are relevant to the context of your data collection.
+
+### 4.2.1 Farm Size
+
+```{r}
+Data <- Data %>%
+  mutate(f_focus_crop_size_hectare = ifelse(f_focus_crop_size_hectare < 0.202343, NA,
+                                            f_focus_crop_size_hectare),
+         f_focus_crop_size = ifelse(f_focus_crop_size_hectare < 0.202343, NA, f_focus_crop_size))
+```
+
+### 4.2.3 Yield
+
+```{r}
+Data <- Data %>%
+  mutate(cal_focus_productivity_kg_hectare = ifelse(cal_focus_productivity_kg_hectare > 750 | cal_focus_productivity_kg_hectare < 10, NA, cal_focus_productivity_kg_hectare))
+
+```
+
+# Section 5. Preparing the variables for disaggregating LIP results
+
+## 5.1 Introduction
+
+In addition to the above mentioned variables we need to identify disaggregation variables. We list the ones we used below
+
+-   Farmer cooperative
+
+-   District
+
+-   Farmer Gender
+
+-   Certification
+
+-   Farmer Age
+
+## 5.2 Farmer Cooperative
+
+Can be found in f_coop_name.
+
+## 5.3 District
+
+The variable admin2_name reflects the region.
+
+## 5.4 Farmer Gender
+
+Stored in variable hh_farmer_gender.
+
+## 5.5 Farmer Age (Youth)
+
+Can be found in hh_farmer_age.
+
+## 5.8 Certification
+
+Variable f_certification_yesno indicates whether farmers are certified.
+
+# Section 6. LIP calculation in R
+
+```{r}
+ #7 is the family size provided in benchmark doc
+
+# Step 2: Pre-process to set specific variables to NA if they are 0 or missing
+# Explanation:
+# - To ensure accurate calculations, set key variables to NA if their values are 0 or already missing.
+# - This step prevents misleading results by removing zero or missing values from further calculations.
+Data <- Data %>%
+  mutate(
+    cal_focus_cost_usd = if_else(cal_focus_cost_usd == 0 | is.na(cal_focus_cost_usd), 
+                                 NA_real_, cal_focus_cost_usd),
+    cal_focus_productivity_kg_hectare = if_else(cal_focus_productivity_kg_hectare == 0 | 
+                                                  is.na(cal_focus_productivity_kg_hectare), 
+                                                NA_real_, cal_focus_productivity_kg_hectare),
+    f_focus_crop_size_hectare = if_else(f_focus_crop_size_hectare == 0 | 
+                                          is.na(f_focus_crop_size_hectare), 
+                                        NA_real_, f_focus_crop_size_hectare),
+    cal_focus_quant_prod_kg = if_else(cal_focus_quant_prod_kg == 0 | 
+                                        is.na(cal_focus_quant_prod_kg), 
+                                      NA_real_, cal_focus_quant_prod_kg),
+    hh_size = if_else(hh_size == 0 | is.na(hh_size), NA_real_, hh_size)
+  )
+
+
+# Step 3: Calculate living income benchmark for the household per year
+Data <- Data %>%
+  mutate(
+    household_equivalent = 1 + pmax(0, (hh_adults_num - 1) * 0.5) + (hh_children_num * 0.3),
+    living_income_benchmark_hh_USD = (benchmark_USD / standard_equivalent) * household_equivalent,
+    living_income_benchmark_hh_GHS = (benchmark_LCU / standard_equivalent) * household_equivalent,
+
+# Step 4: Define a constant depreciation cost
+# What is the cost of establishing a farm divided over its lifespan?
+    depreciation_cost = 75,
+
+# Step 5: Calculate the Living Income Price (LIP) per kg of production
+    lip = if_else(
+      !is.na(living_income_benchmark_hh_USD) & 
+      !is.na(cal_focus_cost_usd) & 
+      !is.na(cal_focus_productivity_kg_hectare) & 
+      !is.na(f_focus_crop_size_hectare) &  
+      !is.na(cal_focus_quant_prod_kg) & cal_focus_quant_prod_kg > 0,
+      ((living_income_benchmark_hh_USD * diversification_ratio) + cal_focus_cost_usd + 
+         depreciation_cost) / (f_focus_crop_size_hectare * cal_focus_productivity_kg_hectare),
+      NA_real_  # Set LIP to NA if any value is missing or invalid
+    )
+  )
+
+
+```
+
+# Section 7. Prepare exports
+
+We create two types of files: anonymized and non-anonymized. Both files also include Codebook questions and Choices.
+
+```{r}
+# Dynamically generate the file name for data export
+data_delivery <- paste("Input data prototype_anonymized", year, case, commodity, country, ".xlsx", sep = "_")
+
+survey_questions <- survey_questions[survey_questions$variable %in% names(Data),]
+
+
+data_delivery <- paste(year,"_",case,"_",commodity,"_",country,".xlsx", sep = "")
+
+# 1. Anonymize the cleaned data
+Data_anonymized <- Data %>%
+  select(
+    -c(starttime, endtime, 
+       #deviceid, subscriberid, simid, devicephonenum, 
+       ),    # Time and device info
+    -c(submitter, farmer_sample, name_of_farmer, mobile_number_farmer) # Personal details
+  )
+
+
+# 3. Prepare the non-anonymized data for the second dataset
+non_anonymized_sets <- list(
+  "Codebook_questions" = survey_questions,
+  "Codebook_choices"= questions_choices,
+  "Cleaned Data (Non-anonymized)" = Data   
+)
+
+# 4. Prepare the anonymized data for the first dataset
+anonymized_sets <- list(
+  "Codebook_questions" = survey_questions,
+  "Codebook_choices"= questions_choices,
+  "Cleaned Data (Anonymized)" = Data_anonymized  # Anonymized cleaned data
+)
+
+# 5. Write the anonymized data to an Excel file
+write.xlsx(anonymized_sets, file = paste0("Anonymized_", data_delivery))
+
+# 6. Write the non-anonymized data to an Excel file
+write.xlsx(non_anonymized_sets, file = paste0("Non-anonymized_", data_delivery))
+
+```

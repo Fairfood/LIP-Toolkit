@@ -65,6 +65,13 @@
                 ]
               }
             ]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "assets/cleaning-and-LIP-calculation",
+              "assets/analysis-and-input-for-slide-deck"
+            ]
           }
         ]
       }

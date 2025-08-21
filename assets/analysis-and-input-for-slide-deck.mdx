@@ -1,0 +1,595 @@
+---
+title: "Step 2: Analysis and Slide-deck Input"
+format: html
+editor: visual
+---
+
+```{r setup, include=FALSE}
+rm(list = ls(), envir = .GlobalEnv)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Preparation
+
+**Load Packages**
+
+```{r}
+library(here); library(readxl); library(openxlsx);
+library(plyr); library(dplyr); library(tidyr); library(tidylog); library(tidyselect)
+library(stringr); library(data.table); library(reshape2); library(ggrepel)
+library(zoo);library(splitstackshape) ;library(tidyverse); library(magrittr) ; library(haven); library(tibble); library(purrr);library(ggplot2)
+```
+
+**Load Data**
+
+```{r}
+data_filename <- "Anonymized_2025_Fairfood_Cocoa_Sierra Leone.xlsx"
+Data <- read_excel(data_filename, sheet=3)
+
+exchange_rate <- 25
+```
+
+**Load Needed Functions**
+
+```{r}
+summarise_lip <- function(data) {
+  data %>%
+    filter(!is.na(lip)) %>%
+    mutate(gets_lip = lip <= cal_focus_price_kg_us) %>%
+    summarise(
+    `Median Living Income Price (USD)` = median(lip, na.rm = TRUE),  
+    `Median Price (USD)` = median(cal_focus_price_kg_us, na.rm = TRUE), 
+    `LIP Gap (USD)` = `Median Living Income Price (USD)` - `Median Price (USD)`,
+    `Number of Farmers` = sum(!is.na(lip)), 
+    `Yield (kg)` = median(cal_focus_productivity_kg_hectare, na.rm = TRUE),
+    `Production Cost (USD)` = median(cal_focus_cost_usd, na.rm = TRUE),
+    `Contextualised Benchmark (USD)` = median(living_income_benchmark_hh_USD, na.rm = TRUE), 
+    `Land Size (ha)` = median(f_focus_crop_size_hectare, na.rm = TRUE),
+    `Break-even Point (USD)` = median(cal_focus_cost_usd_kg, na.rm = TRUE), 
+    `Farmers Receiving LIP (%)` = mean(gets_lip, na.rm = TRUE)*100
+    )
+}
+```
+
+**Prepare Labels for Segmentation**
+
+```{r}
+Data <- Data %>%
+  mutate(youth_farmer = ifelse(hh_farmer_age < 36, "Youth", "Non-youth"), 
+         certification = ifelse(f_certification_yesno == "Yes", "Certified", "Non-Certified"), 
+         cooperative = ifelse(f_coop_yesno == "Yes", "Member", "Non-Member"))
+```
+
+# 1. Sample
+
+**Where are the farmers located?**
+
+```{r}
+table(Data$admin2_name)
+```
+
+**Who are the farmers in our sample?**
+
+```{r}
+sample_characteristics <- Data %>%
+  summarise(
+    Female = mean(hh_farmer_gender == "Female", na.rm = TRUE) * 100, 
+    Male = mean(hh_farmer_gender == "Male", na.rm = TRUE) * 100, 
+    Certified = mean(certification == "Certified", na.rm = TRUE) * 100,
+    `Non-certified` = mean(certification == "Non-Certified", na.rm = TRUE) * 100,
+    `Youth Farmers` = mean(youth_farmer == "Youth", na.rm = TRUE) * 100,
+    `Non-youth Farmers` = mean(youth_farmer == "Non-youth", na.rm = TRUE) * 100,
+    `Cooperative member` = mean(cooperative == "Member", na.rm = TRUE) * 100, 
+    `Non-member` = mean(cooperative == "Non-member", na.rm = TRUE) * 100
+  ) %>%
+  pivot_longer(cols = everything(), names_to = "Group", values_to = "Percentage") %>%
+  mutate(`Row Filter` = case_when(
+    Group %in% c("Female", "Male") ~ "Gender",
+    Group %in% c("Certified", "Non-certified") ~ "Certification Status",
+    Group %in% c("Youth Farmers", "Non-youth Farmers") ~ "Age",
+    Group %in% c("Cooperative member", "Non-member") ~ "Cooperative Membership"
+  ))
+```
+
+**Which certifications are most common among farmers?**
+
+You get three types of information from the following code:
+
+1.  The total number of farmers per certification
+2.  How many % of farmers from the whole sample have a given certification
+3.  How many % of farmers from those certified have a given certification
+
+```{r}
+# Step 1: Explore certifications
+table(Data$f_certification_types)
+
+# Step 2: Make the table (change the certification names based on Step 1)
+n_certified = sum(Data$f_certification_yesno == "Yes", na.rm = TRUE)
+
+certifications <- Data %>%
+  summarise( 
+    Fairtrade = sum(grepl("Fairtrade",f_certification_types), na.rm = TRUE), 
+    Organic = sum(grepl("Organic",f_certification_types), na.rm = TRUE), 
+    Other = sum(grepl("Other",f_certification_types), na.rm = TRUE)) %>%
+  pivot_longer(cols = everything(), names_to = "Certification", values_to= "Number of Farmers") %>%
+  mutate("Percentage of All Farmers" = `Number of Farmers`/nrow(Data)*100, 
+         "Percentage of Certified Farmers" = `Number of Farmers`/n_certified*100)
+```
+
+# 2. Income Sources
+
+**From what sources do farmers earn money?**
+
+```{r}
+income_sources <- Data %>%
+  mutate(
+    total_income = cal_focus_revenue + cal_livestock_income + cal_offfarm_income + cal_other_crop_income,
+    coffee_share = (cal_focus_revenue / total_income) * 100,
+    livestock_share = (cal_livestock_income / total_income) * 100,
+    off_farm_share = (cal_offfarm_income / total_income) * 100,
+    other_crop_share = (cal_other_crop_income / total_income) * 100
+  ) %>%
+  summarise(
+    Coffee = mean(coffee_share, na.rm = TRUE),
+    Livestock = mean(livestock_share, na.rm = TRUE),
+    `Off-farm income` = mean(off_farm_share, na.rm = TRUE),
+    `Other crop income` = mean(other_crop_share, na.rm = TRUE)
+  ) %>%
+  gather(key = "Income source", value = "average_share")
+
+```
+
+**What types of cocoa do farmers grow?**
+
+```{r}
+# Step 1: Identify common types of cocoa
+table(Data$f_focus_crop_type)
+
+# Step 2: Calculate the % of farmers growing the identified cocoa types
+cocoa_types <- Data %>%
+  summarise( 
+    `Ghana Hybrid` = sum(grepl("Ghana",f_focus_crop_type), na.rm = TRUE), 
+    `Cameroon Hybrid` = sum(grepl("Cameroon",f_focus_crop_type), na.rm = TRUE), 
+    `Amelonado` = sum(grepl("Amelonado",f_focus_crop_type), na.rm = TRUE)) %>%
+  pivot_longer(cols = everything(), names_to = "Cocoa Type", values_to= "Number of Farmers")%>%
+  mutate("Percentage of All Farmers" = `Number of Farmers`/nrow(Data)*100) 
+  
+```
+
+**Which crops do farmers sell the most besides cocoa?**
+
+```{r}
+other_crops <- rbind(
+  Data %>% select(f_othermaincrop_1) %>% rename("sold_crops" = f_othermaincrop_1),
+  Data %>% select(f_othermaincrop_2) %>% rename("sold_crops" = f_othermaincrop_2)
+) %>%
+  mutate(sold_crops = ifelse(grepl("Other", sold_crops), "Other", sold_crops)) %>%
+  group_by(sold_crops) %>%
+  summarise(`Pecentage of Farmers` = n()/nrow(Data)*100) %>%
+  arrange(desc(`Pecentage of Farmers`)) %>%
+  filter(!is.na(sold_crops))
+```
+
+# 3. Production Cost
+
+**What are the most common drivers of cost of production?**
+
+```{r}
+# Step 1: Prepare the data for each cost category (input from the choices sheet of the survey)
+recode_values <- list(
+  "f_crop_labour_types/" = c(
+    "f_crop_labour_types/1" = "Land preparation", 
+    "f_crop_labour_types/2" = "Planting", 
+    "f_crop_labour_types/3" = "Crop maintenance", 
+    "f_crop_labour_types/4" = "Pruning",
+    "f_crop_labour_types/5" = "Irrigation and water management", 
+    "f_crop_labour_types/6" = "Fertilizer application",
+    "f_crop_labour_types/7" = "Nursery management", 
+    "f_crop_labour_types/9" = "Pest and disease management",
+    "f_crop_labour_types/10" = "Harvesting", 
+    "f_crop_labour_types/11" = "Post-harvest processing",
+    "f_crop_labour_types/12" = "Quality control and grading", 
+    "f_crop_labour_types/13" = "Storage and transportation"
+  ),
+  "f_inputs_usage_types/" = c(
+    "f_inputs_usage_types/1" = "Seeds and/or seedlings", 
+    "f_inputs_usage_types/2" = "Compost (organic fertilizer)",
+    "f_inputs_usage_types/3" = "Chemical fertilizer", 
+    "f_inputs_usage_types/4" = "Chemicals (pesticides, fungicides, herbicides)",
+    "f_inputs_usage_types/5" = "Pest traps",
+    "f_inputs_usage_types/6" = "Beneficial insects"
+    ),
+  "f_other_costs_types/" = c(
+    "f_other_costs_types/1" = "Water for irrigation", 
+    "f_other_costs_types/2" = "Energy, electricity, fuel",
+    "f_other_costs_types/3" = "Purchase/rent of land", 
+    "f_other_costs_types/4" = "Storage",
+    "f_other_costs_types/5" = "Transportation", 
+    "f_other_costs_types/6" = "Marketing and selling",
+    "f_other_costs_types/7" = "Cooperative membership",
+    "f_other_costs_types/8" = "Taxes", 
+    "f_other_costs_types/9" = "Payroll cost",
+    "f_other_costs_types/10" = "Operational cost"
+  ))
+
+# Step 2: Select the relevant columns from Data
+data <- Data %>% 
+  select(starts_with("f_crop_labour_types/"), 
+         starts_with("f_inputs_usage_types/"), 
+         starts_with("f_other_costs_types/"))
+
+# Step 3: Create the summary table for all cost types
+cost_wheel <- map_dfr(names(recode_values), ~ {
+  category <- .x
+  recode_map <- recode_values[[category]]
+  
+  # Extract, filter, pivot, and recode data
+  data %>%
+    select(starts_with(category)) %>%
+    pivot_longer(cols = everything(), names_to = "type", values_to = "value") %>%
+    # Filter out unwanted values and types
+    filter(!type %in% c(paste0(category, "0"), paste0(category, "77"), paste0(category, "9998"), paste0(category, "9997"))) %>%
+    filter(value == 1) %>%
+    mutate(cost = recode(type, !!!recode_map)) %>%
+    group_by(cost) %>%
+    summarise(
+      number_of_farmers = n(),
+      share_of_farmers = (n() / nrow(Data)) * 100)  # Calculate share of farmers
+}) %>%
+
+# Step 4: Filter for costs with a share of farmers greater than 5%
+  filter(share_of_farmers > 5) %>%
+  arrange(desc(share_of_farmers)) %>%
+  mutate(category = case_when(cost %in% recode_values$`f_crop_labour_types/` ~ "Labour Cost",
+                              cost %in% recode_values$`f_inputs_usage_types/` ~ "Input Cost",
+                              cost %in% recode_values$`f_other_costs_types/` ~ "Other Cost",
+                              TRUE~ NA_character_)) %>%
+  select(category, everything())
+
+```
+
+**What kind of labour are farmers paying for?**
+
+```{r}
+
+labour_variables <- c("f_crop_labour_permanent_costs", "cal_labour_temporary_cost",
+                      "f_crop_groups_labourer_costs")
+labour_labels <- c(
+  f_crop_labour_permanent_costs = "Permanent Labour", 
+  cal_labour_temporary_cost = "Temporary Labour", 
+  f_crop_groups_labourer_costs = "Labour Groups")
+
+labour_summary <- Data %>%
+  select(all_of(labour_variables)) %>%
+  pivot_longer(cols = everything(), names_to = "Labour Type", values_to = "Cost") %>%
+  mutate(`Labour Type` = labour_labels[`Labour Type`]) %>%
+  group_by(`Labour Type`) %>%
+  summarise(
+    `Share of farmers` = mean(Cost > 0, na.rm = TRUE) * 100,
+    `Median cost` = median(Cost, na.rm = TRUE),
+    .groups = "drop") %>%
+  arrange(desc(`Share of farmers`))
+```
+
+# 4. Productivity
+
+**How does productivity compare between different farmer segments?**
+
+```{r}
+productivity_segments <- bind_rows(
+  Data %>%
+    group_by(Group = hh_farmer_gender) %>%
+    summarise(`Median Productivity` = median(cal_focus_productivity_kg_hectare, na.rm = TRUE),
+              `Row Filter` = "Gender",
+              Count = n()),
+  
+  Data %>%
+    group_by(Group = certification) %>%
+    summarise(`Median Productivity` = median(cal_focus_productivity_kg_hectare, na.rm = TRUE),
+              `Row Filter` = "Certification Status",
+              Count = n()),
+  
+  Data %>%
+    group_by(Group = youth_farmer) %>%
+    summarise(`Median Productivity` = median(cal_focus_productivity_kg_hectare, na.rm = TRUE),
+              `Row Filter` = "Age",
+              Count = n()),
+  
+  Data %>% 
+    group_by(Group = cooperative) %>%
+    summarise(`Median Productivity` = median(cal_focus_productivity_kg_hectare, na.rm = TRUE),
+              `Row Filter` = "Cooperative Membership",
+              Count = n())) %>%
+ mutate(`Percentage of Farmers` = round(Count / nrow(Data) * 100, 2))
+```
+
+**How much cocoa do farmers in different districts produce?**
+
+```{r}
+productivity_districts <- bind_rows(
+  Data %>%
+    group_by(admin2_name) %>%
+    summarise(
+      `Quantity` = median(cal_focus_productivity_kg_hectare, na.rm = TRUE),
+      `Row Filter` = "Yield per hectare"), 
+  
+    Data %>%
+    group_by(admin2_name) %>%
+    summarise(
+      `Quantity` = median(cal_focus_quant_prod_kg, na.rm = TRUE),
+      `Row Filter` = "Total Produced Volume"))
+```
+
+# 5. Living Income Price
+
+**Overview of key median and mean values**
+
+```{r}
+lip_variables <- c("hh_size", "living_income_benchmark_hh_USD", "diversification_ratio",
+                   "cal_focus_cost_usd", "f_focus_crop_size_hectare", 
+                   "cal_focus_productivity_kg_hectare")
+
+lip_labels <- c(
+  hh_size = "Household Size", 
+  living_income_benchmark_hh_USD = "Contextualised Benchmark (USD)", 
+  diversification_ratio = "Diversification Ratio", 
+  cal_focus_cost_usd = "Production Cost (USD)", 
+  f_focus_crop_size_hectare = "Land for Cultivation", 
+  cal_focus_productivity_kg_hectare = "Yield (kg/ha)"
+)
+
+lip_indicators <- Data %>%
+  select(all_of(lip_variables)) %>%
+  pivot_longer(cols = everything(), names_to = "Key Indicator", values_to = "Value") %>%
+  mutate(`Key Indicator` = lip_labels[`Key Indicator`]) %>%
+  group_by(`Key Indicator`) %>%
+  summarise(
+    Mean = mean(Value, na.rm = TRUE), 
+    Median = median(Value, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(cols = c(Mean, Median), names_to = "Statistic", values_to = "Value")%>%
+  pivot_wider(names_from = `Key Indicator`, values_from = Value)
+```
+
+**What is the median received price and LIP for cocoa farmers?**
+
+```{r}
+even_price_lip <- bind_rows(
+  Data %>%
+    summarise(`Break-even point` = median(cal_focus_cost/cal_focus_quant_prod_kg, na.rm = TRUE),
+              `Received Price` = median(cal_focus_price_kg, na.rm = TRUE), 
+              `Living Income Price` = median(lip*exchange_rate, na.rm = TRUE)) %>%
+    pivot_longer(cols = everything(), names_to = "Item", values_to = "Amount") %>%
+    mutate(`Currency` = "LCU"), 
+    Data %>%
+    summarise(`Break-even point` = median(cal_focus_cost_usd_kg, na.rm = TRUE),
+              `Received Price` = median(cal_focus_price_kg_us, na.rm = TRUE), 
+              `Living Income Price` = median(lip, na.rm = TRUE)) %>%
+       pivot_longer(cols = everything(), names_to = "Item", values_to = "Amount") %>%
+    mutate(`Currency` = "USD"))
+
+  
+
+```
+
+**What is the median price and median LIP for different farmer segments?**
+
+```{r}
+LIP_segments <- bind_rows(
+  Data %>%
+    group_by(Group = hh_farmer_gender) %>%
+    summarise_lip() %>%
+    mutate(`Row Filter` = "Gender"),
+  
+  Data %>%
+    group_by(Group = certification) %>%
+    summarise_lip() %>%
+    mutate(`Row Filter` = "Certification Status"),
+  
+  Data %>%
+    group_by(Group = youth_farmer) %>%
+    summarise_lip() %>%
+    mutate(`Row Filter` = "Age"),
+  
+  Data %>% 
+  group_by(Group = cooperative) %>%
+  summarise_lip() %>%
+    mutate(`Row Filter` = "Cooperative Membership"))
+```
+
+# 6. Intervention Impact
+
+We model the percentage decrease in the Living Income Price after the implementation of interventions with three different goals:\
+\
+**1. A 10% increase in income diversification\
+2. A 10% increase in productivity\
+3. A 10% decrease in labour cost**
+
+This data serves as an input for the final graph in the slide-deck, the intervention heatmap and is also segmented based on out established farmer groups.
+
+We start off by calculating the impact of the income diversification on the LIP, specifically the percentage decrease in the price we would see if farmers had additional sources of income.
+
+```{r}
+Data <- Data %>%
+  mutate(
+    lip_increased_diversification = if_else(
+      !is.na(living_income_benchmark_hh_USD) & 
+      !is.na(cal_focus_cost_usd) & 
+      !is.na(cal_focus_productivity_kg_hectare) & 
+      !is.na(f_focus_crop_size_hectare) & 
+      !is.na(cal_focus_quant_prod_kg) & cal_focus_quant_prod_kg > 0,  # Ensure production quantity is valid
+      ((living_income_benchmark_hh_USD * (diversification_ratio-0.1)) + cal_focus_cost_usd + depreciation_cost) / 
+        (f_focus_crop_size_hectare * cal_focus_productivity_kg_hectare),
+      NA_real_  # Set LIP to NA if any value is missing or invalid
+    ))
+
+diversification_summary <- bind_rows(
+  Data %>% 
+  group_by(hh_farmer_gender) %>%
+  filter(!is.na(hh_farmer_gender)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_increased_diversification, na.rm=TRUE),
+            `Income Diversification` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(hh_farmer_gender,`Income Diversification`)%>%
+  rename("Farmer Category" = hh_farmer_gender), 
+  
+    Data %>% 
+  group_by(certification) %>%
+  filter(!is.na(certification)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_increased_diversification, na.rm=TRUE),
+            `Income Diversification` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(certification,`Income Diversification`)%>%
+  rename("Farmer Category" = certification),
+  
+  Data %>% 
+  group_by(youth_farmer) %>%
+  filter(!is.na(youth_farmer)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_increased_diversification, na.rm=TRUE),
+            `Income Diversification` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(youth_farmer,`Income Diversification`)%>%
+  rename("Farmer Category" = youth_farmer),
+  
+  Data %>% 
+  group_by(cooperative) %>%
+  filter(!is.na(cooperative)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_increased_diversification, na.rm=TRUE),
+            `Income Diversification` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(cooperative,`Income Diversification`)%>%
+  rename("Farmer Category" = cooperative)
+  )
+```
+
+Secondly, we do the same but with a productivity increase. Because of the way the LIP is calculated this will always come out to 9.09% per every segment.
+
+```{r}
+Data <- Data %>%
+  mutate(
+    depreciation_cost = 75, 
+    lip_increased_productivity = if_else(
+      !is.na(living_income_benchmark_hh_USD) & 
+      !is.na(cal_focus_cost_usd) & 
+      !is.na(cal_focus_productivity_kg_hectare) & 
+      !is.na(f_focus_crop_size_hectare) & 
+      !is.na(cal_focus_quant_prod_kg) & cal_focus_quant_prod_kg > 0,  # Ensure production quantity is valid
+      ((living_income_benchmark_hh_USD * diversification_ratio) + cal_focus_cost_usd + depreciation_cost) / 
+        (f_focus_crop_size_hectare * (cal_focus_productivity_kg_hectare * 1.1)),
+      NA_real_  # Set LIP to NA if any value is missing or invalid
+    ), 
+    pct_change = (lip -lip_increased_productivity)/lip*100
+  )
+
+increased_productivity_summary <- bind_rows(
+  Data %>% 
+  group_by(hh_farmer_gender) %>%
+  filter(!is.na(hh_farmer_gender)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_increased_productivity, na.rm=TRUE),
+            `Productivity Increase` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(hh_farmer_gender,`Productivity Increase`)%>%
+  rename("Farmer Category" = hh_farmer_gender), 
+  
+    Data %>% 
+  group_by(certification) %>%
+  filter(!is.na(certification)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_increased_productivity, na.rm=TRUE),
+            `Productivity Increase` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(certification,`Productivity Increase`)%>%
+  rename("Farmer Category" = certification),
+  
+  Data %>% 
+  group_by(youth_farmer) %>%
+  filter(!is.na(youth_farmer)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_increased_productivity, na.rm=TRUE),
+            `Productivity Increase` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(youth_farmer,`Productivity Increase`)%>%
+  rename("Farmer Category" = youth_farmer),
+  
+  Data %>% 
+  group_by(cooperative) %>%
+  filter(!is.na(cooperative)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_increased_productivity, na.rm=TRUE),
+            `Productivity Increase` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(cooperative,`Productivity Increase`)%>%
+  rename("Farmer Category" = cooperative)
+  )
+
+```
+
+And lastly also with reductions to the production cost. A good sanity check can be done here: these reductions are usually the lowest. If you see reductions larger than 5%, we encourage you to explore your data, especially production cost to see whether the values are realistic and truly reflect the situation of your farmers.
+
+```{r}
+Data <- Data %>%
+mutate(
+    lip_cost_decrease = if_else(
+      !is.na(living_income_benchmark_hh_USD) & 
+      !is.na(cal_focus_cost_usd) & 
+      !is.na(cal_focus_productivity_kg_hectare) & 
+      !is.na(f_focus_crop_size_hectare) & 
+      !is.na(cal_focus_quant_prod_kg) & cal_focus_quant_prod_kg > 0, 
+      ((living_income_benchmark_hh_USD * diversification_ratio) + cal_focus_cost_usd*0.9 + depreciation_cost) / 
+        (f_focus_crop_size_hectare * cal_focus_productivity_kg_hectare),
+      NA_real_
+    )) %>%
+  ungroup()
+
+cost_reduction_summary <- bind_rows(
+  Data %>% 
+  group_by(hh_farmer_gender) %>%
+  filter(!is.na(hh_farmer_gender)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_cost_decrease, na.rm=TRUE),
+            `Cost Decrease` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(hh_farmer_gender,`Cost Decrease`)%>%
+  rename("Farmer Category" = hh_farmer_gender), 
+  
+    Data %>% 
+  group_by(certification) %>%
+  filter(!is.na(certification)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_cost_decrease, na.rm=TRUE),
+            `Cost Decrease` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(certification,`Cost Decrease`)%>%
+  rename("Farmer Category" = certification),
+  
+  Data %>% 
+  group_by(youth_farmer) %>%
+  filter(!is.na(youth_farmer)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_cost_decrease, na.rm=TRUE),
+            `Cost Decrease` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(youth_farmer,`Cost Decrease`)%>%
+  rename("Farmer Category" = youth_farmer),
+  
+  Data %>% 
+  group_by(cooperative) %>%
+  filter(!is.na(cooperative)) %>%
+  summarise(median_lip = median(lip, na.rm = TRUE),
+            median_lip_v2= median(lip_cost_decrease, na.rm=TRUE),
+            `Cost Decrease` = (median_lip - median_lip_v2)/median_lip*100) %>%
+  select(cooperative,`Cost Decrease`)%>%
+  rename("Farmer Category" = cooperative)
+  )
+
+```
+
+**What is the impact of interventions on the segment-specific LIP?**
+
+This code combines the tables and reshapes them into the exact output you will input into Flourish.
+
+```{r}
+intervention_table <- diversification_summary %>%
+  left_join(increased_productivity_summary, by = "Farmer Category") %>%
+  left_join(cost_reduction_summary, by = "Farmer Category") %>%
+  pivot_longer(
+    cols = -`Farmer Category`,
+    names_to = "Intervention",
+    values_to = "LIP Reduction (%)"
+  )
+```
