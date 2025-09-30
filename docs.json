@@ -18,7 +18,6 @@
             "group": "Introduction",
             "pages": [
               "introduction/farmer-income-data-toolkit",
-              "introduction/resource-library",
               "introduction/introduction-to-the-FID",
               "introduction/introduction-to-this-toolkit"
             ]
@@ -67,10 +66,9 @@
             ]
           },
           {
-            "group": "Tools",
+            "group": "Resource Library",
             "pages": [
-              "assets/cleaning-and-LIP-calculation",
-              "assets/analysis-and-input-for-slide-deck"
+              "introduction/resource-library"
             ]
           }
         ]
