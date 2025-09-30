@@ -5,7 +5,7 @@
   "colors": {
     "primary": "#395542",
     "light": "#395542",
-    "dark": "#395542"
+    "dark": "#F5D77D"
   },
   "favicon": "/images/favicon.png",
   "appearance": {"default": "light", "strict": true},
