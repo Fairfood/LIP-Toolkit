@@ -82,8 +82,8 @@
   "navbar": {
     "primary": {
       "type": "button",
-      "label": "GitHub",
-      "href": "https://github.com/fairfood/lip-toolkit/tree/main"
+      "label": "Contact us",
+      "href": "https://fairfood.org/en/contact/"
     }
   }
 }
