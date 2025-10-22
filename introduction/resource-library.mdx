@@ -50,21 +50,34 @@ The session offers a first look at how farmer-level income data is being turned 
 
 ### 1. **Honduran Coffee: October 7th** 
 
-<div class="flex flex-col md:flex-row w-full items-stretch">
-  <img src="/images/resource-1.png" alt="Honduras Coffee" class="w-full md:w-1/2 object-cover" />
-
-  <div class="w-full md:w-1/2 p-4 flex flex-col">
-    {/* <div class="font-bold mb-0">Honduras – Coffee</div> */}
-
-    <div class="mb-2">
-      Applied the Living Income Price (LIP) and Cost–Yield Efficiency (CYE) tools with Molinos de Honduras (Volcafe) to map cost drivers, inefficiencies, and opportunities among supplier farmers.
+<div className="flex flex-col md:flex-row w-full items-stretch">
+  {/* Image column */}
+  <div className="w-full md:basis-1/2 md:flex-none">
+    {/* Mobile gets a stable box; desktop centers image within column */}
+    <div className="flex items-center justify-center bg-gray-50" style={{ aspectRatio: '2 / 3' }}>
+      <img
+        src="/images/resource-1.png"
+        alt="Portrait"
+        className="block max-w-full max-h-full object-contain"
+        loading="lazy"
+      />
     </div>
+  </div>
 
+  {/* Text column */}
+  <div className="w-full md:basis-1/2 p-4 flex flex-col justify-center">
+    <div className="mb-2">
+      Applied the Living Income Price (LIP) and Cost–Yield Efficiency (CYE) tools with Molinos de Honduras (Volcafe) to map cost drivers, inefficiencies, and opportunities among supplier farmers.  
+    </div>
     <div>
-      <span class="font-bold">Outcome:</span> Influenced corporate policy through farmer segmentation as a crucial step in defining targeted interventions with clear KPIs and objectives, highlighting gender-based cost differences and efficiency gaps.
+      <span>
+        <span className="font-bold">Outcome:</span> Influenced corporate policy through farmer segmentation as a crucial step in defining targeted interventions with clear KPIs and objectives, highlighting gender-based cost differences and efficiency gaps.
+      </span>
     </div>
   </div>
 </div>
+
+
 
 **Use:** The study validated results with 30 farmers during the *Laboratorio de Ingreso Digno*, fostering data ownership and integrating findings into the “Volcafe Way” farmer support programme to close income gaps.  
 **Special feature:** Direct private-sector integration, with recommendations embedded into ongoing supplier programmes.
@@ -80,19 +93,28 @@ The session offers a first look at how farmer-level income data is being turned 
 
 ### 2. **Sierra Leonean cocoa - October 15th** 
 
-<div class="flex flex-col md:flex-row w-full items-stretch">
-  <img src="/images/resource-2.png" alt="Honduras Coffee" class="w-full md:w-1/2 object-cover" />
+<div className="flex flex-col md:flex-row w-full items-stretch">
+  {/* Image column */}
+  <div className="w-full md:basis-1/2 md:flex-none">
+    {/* Mobile gets a stable box; desktop centers image within column */}
+    <div className="flex items-center justify-center bg-gray-50" style={{ aspectRatio: '2 / 3' }}>
+      <img
+        src="/images/resource-2.png"
+        alt="Portrait"
+        className="block max-w-full max-h-full object-contain"
+        loading="lazy"
+      />
+    </div>
+  </div>
 
-  <div class="w-full md:w-1/2 p-4 flex flex-col justify-center">
-    {/* <div class="font-bold mb-0">Sierra Leone – Cocoa</div> */}
-
-    <div class="mb-2">
+  {/* Text column */}
+  <div className="w-full md:basis-1/2 p-4 flex flex-col justify-center">
+    <div className="mb-2">
       Following the creation of the first Living Income Benchmark by KIT in Sierra Leone, we applied the LIP and CYE in the country’s cocoa sector in collaboration with Solidaridad West Africa. Together, Fairfood and Solidaridad collected and analysed farmer-level data in five cocoa-producing districts, with Akvo supporting the identification of four farmer profiles.
     </div>
-
-    <div>
-      <span class="font-bold">Outcome:</span> The first district-specific action points for input access, replanting, post-harvest handling, and youth inclusion.
-    </div>
+    <span>
+      <span className="font-bold">Outcome:</span> The first district-specific action points for input access, replanting, post-harvest handling, and youth inclusion.
+    </span>
   </div>
 </div>
 
